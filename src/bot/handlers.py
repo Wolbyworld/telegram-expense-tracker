@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+from PIL import Image as PILImage
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -25,8 +26,9 @@ from src.services.currency_service import convert_to_base
 from src.services.dedup_service import compute_image_hash, find_duplicate
 from src.services.image_enhance import enhance_receipt
 from src.services.report_service import generate_csv, generate_pdf
+from src.utils.filters import parse_filters
 
-from PIL import Image as PILImage
+logger = logging.getLogger(__name__)
 
 
 def _enhance_image(raw_bytes: bytes) -> bytes:
@@ -38,7 +40,9 @@ def _enhance_image(raw_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
-def _save_receipt_images(receipt_dir: str, filename: str, raw_bytes: bytes, enhanced_bytes: bytes) -> tuple[str, str]:
+def _save_receipt_images(
+    receipt_dir: str, filename: str, raw_bytes: bytes, enhanced_bytes: bytes,
+) -> tuple[str, str]:
     """Save raw and enhanced receipt images. Returns (raw_path, enhanced_path)."""
     os.makedirs(receipt_dir, exist_ok=True)
     enhanced_dir = os.path.join(receipt_dir, "enhanced")
@@ -53,9 +57,6 @@ def _save_receipt_images(receipt_dir: str, filename: str, raw_bytes: bytes, enha
         f.write(enhanced_bytes)
 
     return raw_path, enhanced_path
-from src.utils.filters import parse_filters
-
-logger = logging.getLogger(__name__)
 
 
 def authorized(func):

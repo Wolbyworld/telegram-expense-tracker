@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
@@ -332,7 +333,6 @@ async def expense_receipt(
         )
     # Prefer enhanced version unless ?raw=true
     if not raw:
-        from pathlib import Path
         raw_path = Path(expense.receipt_path)
         enhanced_path = raw_path.parent / "enhanced" / raw_path.name
         if enhanced_path.exists():

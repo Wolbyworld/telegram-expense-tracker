@@ -44,7 +44,9 @@ def fix_orientation(img: Image.Image) -> Image.Image:
 
     gray = cv2.cvtColor(center, cv2.COLOR_BGR2GRAY)
     # Adaptive threshold to isolate text from background
-    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 8)
+    thresh = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 8,
+    )
 
     # Find short line segments (text-scale, not background edges)
     lines = cv2.HoughLinesP(thresh, 1, np.pi / 180, threshold=30, minLineLength=20, maxLineGap=5)
@@ -69,7 +71,10 @@ def fix_orientation(img: Image.Image) -> Image.Image:
     # Default to +90° CCW — correct for most phone-landscape receipt photos.
     # Can't reliably distinguish right-side-up from upside-down without OCR.
     if ratio > 1.3:
-        logger.info("Detected sideways text (V=%.0f H=%.0f ratio=%.2f), rotating 90° CCW", vertical, horizontal, ratio)
+        logger.info(
+            "Detected sideways text (V=%.0f H=%.0f ratio=%.2f), rotating 90° CCW",
+            vertical, horizontal, ratio,
+        )
         return img.rotate(90, expand=True)
 
     return img
@@ -186,17 +191,19 @@ def deskew(img: Image.Image) -> Image.Image:
     # Rotate
     h, w = cv_img.shape[:2]
     center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, median_angle, 1.0)
+    rot_mat = cv2.getRotationMatrix2D(center, median_angle, 1.0)
 
     # Compute new bounding box size
-    cos = abs(M[0, 0])
-    sin = abs(M[0, 1])
+    cos = abs(rot_mat[0, 0])
+    sin = abs(rot_mat[0, 1])
     new_w = int(h * sin + w * cos)
     new_h = int(h * cos + w * sin)
-    M[0, 2] += (new_w - w) / 2
-    M[1, 2] += (new_h - h) / 2
+    rot_mat[0, 2] += (new_w - w) / 2
+    rot_mat[1, 2] += (new_h - h) / 2
 
-    rotated = cv2.warpAffine(cv_img, M, (new_w, new_h), borderMode=cv2.BORDER_REPLICATE)
+    rotated = cv2.warpAffine(
+        cv_img, rot_mat, (new_w, new_h), borderMode=cv2.BORDER_REPLICATE,
+    )
     return _cv_to_pil(rotated)
 
 
@@ -261,8 +268,8 @@ def perspective_correct(img: Image.Image) -> Image.Image:
         [out_w - 1, out_h - 1], [0, out_h - 1],
     ], dtype=np.float32)
 
-    M = cv2.getPerspectiveTransform(ordered, dst)
-    warped = cv2.warpPerspective(cv_img, M, (out_w, out_h))
+    persp_mat = cv2.getPerspectiveTransform(ordered, dst)
+    warped = cv2.warpPerspective(cv_img, persp_mat, (out_w, out_h))
 
     logger.info("Perspective corrected to %dx%d", out_w, out_h)
     return _cv_to_pil(warped)
