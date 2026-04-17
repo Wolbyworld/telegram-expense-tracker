@@ -1,0 +1,217 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Schedules - Expense Tracker{% endblock %}
+
+{% block content %}
+<div x-data="{
+    showForm: false,
+    frequency: 'daily',
+    emailEnabled: false,
+    showFilters: false,
+    sendTelegram: true,
+}">
+
+    <!-- Page header -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-extrabold text-on-surface font-headline tracking-tight">Scheduled reports</h1>
+            <p class="text-sm text-on-surface-variant mt-1">Automated report delivery</p>
+        </div>
+        <button @click="showForm = !showForm"
+                class="inline-flex items-center gap-2 bg-primary hover:bg-primary-container text-on-primary px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[20px]">add</span>
+            New schedule
+        </button>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="flex items-center gap-6 mb-8 text-sm text-on-surface-variant">
+        <span class="inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-primary">check_circle</span>
+            <strong class="text-on-surface">{{ active_count }}</strong> active schedule{{ 's' if active_count != 1 else '' }}
+        </span>
+        <span class="text-outline-variant">|</span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-primary">schedule</span>
+            Next run coming soon
+        </span>
+        <span class="text-outline-variant">|</span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-primary">send</span>
+            {{ schedules|length }} report{{ 's' if schedules|length != 1 else '' }} configured
+        </span>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+        <!-- Left column: New schedule form -->
+        <div class="lg:col-span-2" x-show="showForm" x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+             x-cloak>
+            <div class="bg-white rounded-2xl shadow-ambient border border-outline-variant/30 p-6">
+                <h2 class="text-lg font-bold text-on-surface font-headline mb-5">New schedule</h2>
+
+                <form hx-post="/admin/schedules" hx-target="#schedule-list" hx-swap="innerHTML"
+                      @htmx:after-request.window="if(event.detail.successful) { showForm = false; }"
+                      class="space-y-5">
+
+                    <!-- Frequency -->
+                    <div>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Frequency</label>
+                        <div class="flex bg-surface-container rounded-xl p-1 gap-1">
+                            <template x-for="f in ['daily', 'weekly', 'monthly']" :key="f">
+                                <button type="button" @click="frequency = f"
+                                        :class="frequency === f
+                                            ? 'bg-primary text-on-primary shadow-sm'
+                                            : 'text-on-surface-variant hover:text-on-surface'"
+                                        class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold capitalize transition-all duration-150"
+                                        x-text="f">
+                                </button>
+                            </template>
+                        </div>
+                        <input type="hidden" name="frequency" :value="frequency">
+                    </div>
+
+                    <!-- Day selector (weekly) -->
+                    <div x-show="frequency === 'weekly'" x-transition>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Day of week</label>
+                        <select name="day_of_week"
+                                class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                            <option value="5">Saturday</option>
+                            <option value="6">Sunday</option>
+                        </select>
+                    </div>
+
+                    <!-- Day selector (monthly) -->
+                    <div x-show="frequency === 'monthly'" x-transition>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Day of month</label>
+                        <select name="day_of_month"
+                                class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            {% for d in range(1, 29) %}
+                            <option value="{{ d }}">Day {{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Time -->
+                    <div>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Time</label>
+                        <input type="time" name="time_utc" value="09:00"
+                               class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                    </div>
+
+                    <!-- Timezone -->
+                    <div>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Timezone</label>
+                        <select name="timezone"
+                                class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            <option value="Europe/Madrid" selected>Europe/Madrid</option>
+                            <option value="UTC">UTC</option>
+                            <option value="America/New_York">America/New_York</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles</option>
+                            <option value="America/Chicago">America/Chicago</option>
+                            <option value="Europe/London">Europe/London</option>
+                            <option value="Europe/Berlin">Europe/Berlin</option>
+                            <option value="Asia/Tokyo">Asia/Tokyo</option>
+                            <option value="Asia/Shanghai">Asia/Shanghai</option>
+                            <option value="Australia/Sydney">Australia/Sydney</option>
+                        </select>
+                    </div>
+
+                    <!-- Data filters (collapsible) -->
+                    <div>
+                        <button type="button" @click="showFilters = !showFilters"
+                                class="flex items-center gap-2 text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors w-full">
+                            <span class="material-symbols-outlined text-[18px] transition-transform duration-200"
+                                  :class="showFilters ? 'rotate-90' : ''">chevron_right</span>
+                            Data filters
+                        </button>
+                        <div x-show="showFilters" x-transition class="mt-3 space-y-3 pl-1">
+                            <div>
+                                <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Expense type</label>
+                                <select name="expense_type"
+                                        class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                                    <option value="all">All expenses</option>
+                                    <option value="personal">Personal</option>
+                                    <option value="company">Company</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Category</label>
+                                <input type="text" name="category" placeholder="e.g. groceries, dining"
+                                       class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-outline">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delivery method -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-on-surface">Delivery method</label>
+
+                        <!-- Telegram toggle -->
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[20px] text-primary">send</span>
+                                <span class="text-sm text-on-surface">Telegram</span>
+                            </div>
+                            <div class="relative">
+                                <input type="hidden" name="send_telegram" value="false">
+                                <input type="checkbox" name="send_telegram" value="true" x-model="sendTelegram"
+                                       class="sr-only peer" checked>
+                                <div class="w-10 h-6 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                            </div>
+                        </label>
+
+                        <!-- Email toggle -->
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[20px] text-primary">email</span>
+                                <span class="text-sm text-on-surface">Email</span>
+                            </div>
+                            <div class="relative">
+                                <input type="hidden" name="email_enabled" value="false">
+                                <input type="checkbox" name="email_enabled" value="true" x-model="emailEnabled"
+                                       class="sr-only peer">
+                                <div class="w-10 h-6 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                            </div>
+                        </label>
+
+                        <div x-show="emailEnabled" x-transition class="pl-8">
+                            <input type="email" name="email" placeholder="you@example.com"
+                                   class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-outline">
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="pt-2 flex gap-3">
+                        <button type="submit"
+                                class="flex-1 bg-primary hover:bg-primary-container text-on-primary py-2.5 px-5 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+                            Create schedule
+                        </button>
+                        <button type="button" @click="showForm = false"
+                                class="px-4 py-2.5 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Right column: Schedule list -->
+        <div :class="showForm ? 'lg:col-span-3' : 'lg:col-span-5'">
+            <h2 class="text-lg font-bold text-on-surface font-headline mb-4">Your schedules</h2>
+            <div id="schedule-list">
+                {% include "admin/schedules/_list.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

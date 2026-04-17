@@ -1,0 +1,131 @@
+{% set cat_colors = {
+    'Food': 'bg-amber-50 text-amber-700',
+    'Transport': 'bg-sky-50 text-sky-700',
+    'Accommodation': 'bg-violet-50 text-violet-700',
+    'Entertainment': 'bg-pink-50 text-pink-700',
+    'Shopping': 'bg-rose-50 text-rose-700',
+    'Communication': 'bg-indigo-50 text-indigo-700',
+    'Office': 'bg-slate-100 text-slate-700',
+    'Health': 'bg-emerald-50 text-emerald-700',
+    'Other': 'bg-stone-100 text-stone-600',
+    'Groceries': 'bg-teal-50 text-teal-700',
+    'Food & Dining': 'bg-orange-50 text-orange-700',
+    'Software': 'bg-blue-50 text-blue-700',
+} %}
+
+{% set vendor_icon_map = {
+    'mercadona': 'local_grocery_store',
+    'carrefour': 'local_grocery_store',
+    'uber': 'local_taxi',
+    'starbucks': 'local_cafe',
+    'aws': 'cloud',
+    'amazon': 'shopping_cart',
+} %}
+
+<tr id="expense-row-{{ expense.id }}"
+    class="group border-t border-surface-container-low hover:bg-surface-container-lowest/50 transition-colors cursor-pointer"
+    @click="fetch('/admin/expenses/{{ expense.id }}').then(r => r.text()).then(html => $dispatch('open-detail', html))">
+
+    {# Date #}
+    <td class="px-6 py-4">
+        <span class="text-sm font-medium text-on-surface">
+            {{ expense.date.strftime('%b %d') }}
+        </span>
+    </td>
+
+    {# Vendor #}
+    <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+            {% set vkey = (expense.vendor or '').lower() %}
+            <div class="w-8 h-8 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                <span class="material-symbols-outlined text-[18px] text-on-surface-variant">
+                    {{ vendor_icon_map.get(vkey, 'receipt') }}
+                </span>
+            </div>
+            <span class="text-sm font-medium text-on-surface">{{ expense.vendor or 'Unknown' }}</span>
+        </div>
+    </td>
+
+    {# Category + Type #}
+    <td class="px-6 py-4" @click.stop>
+        {% set cat = expense.category or 'Other' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ cat_colors.get(cat, 'bg-stone-100 text-stone-600') }}">
+            {{ cat }}
+        </span>
+        {% if expense.expense_type %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ml-1
+            {{ 'bg-tertiary-container/20 text-tertiary' if expense.expense_type == 'company' else 'bg-secondary-container text-on-secondary-container' }}">
+            {{ expense.expense_type | capitalize }}
+        </span>
+        {% else %}
+        <div class="mt-1.5 flex items-center gap-1">
+            <button hx-patch="/admin/expenses/{{ expense.id }}"
+                    hx-target="#expense-row-{{ expense.id }}"
+                    hx-swap="outerHTML"
+                    hx-vals='{"expense_type": "personal"}'
+                    class="px-2 py-0.5 rounded-full text-[10px] font-medium text-on-surface-variant bg-surface-container hover:bg-secondary-container hover:text-on-secondary-container transition-colors"
+                    title="Tag as Personal">
+                Personal
+            </button>
+            <button hx-patch="/admin/expenses/{{ expense.id }}"
+                    hx-target="#expense-row-{{ expense.id }}"
+                    hx-swap="outerHTML"
+                    hx-vals='{"expense_type": "company"}'
+                    class="px-2 py-0.5 rounded-full text-[10px] font-medium text-on-surface-variant bg-surface-container hover:bg-tertiary-container/20 hover:text-tertiary transition-colors"
+                    title="Tag as Company">
+                Company
+            </button>
+        </div>
+        {% endif %}
+    </td>
+
+    {# Amount #}
+    <td class="px-6 py-4 text-right">
+        <div>
+            <span class="text-sm font-semibold text-on-surface">
+                {% if expense.eur_amount is not none %}
+                    &euro; {{ '{:,.2f}'.format(expense.eur_amount | float) }}
+                {% else %}
+                    {{ expense.original_currency }} {{ '{:,.2f}'.format(expense.original_amount | float) }}
+                {% endif %}
+            </span>
+            {% if expense.original_currency != 'EUR' and expense.eur_amount is not none %}
+            <div class="text-xs text-on-surface-variant mt-0.5">
+                {{ expense.original_currency }} {{ '{:,.2f}'.format(expense.original_amount | float) }}
+            </div>
+            {% endif %}
+        </div>
+    </td>
+
+    {# Location #}
+    <td class="px-6 py-4">
+        <span class="text-sm text-on-surface-variant">
+            {% if expense.location_city or expense.location_country %}
+                {{ expense.location_city or '' }}{% if expense.location_city and expense.location_country %}, {% endif %}{{ expense.location_country or '' }}
+            {% else %}
+                &mdash;
+            {% endif %}
+        </span>
+    </td>
+
+    {# Actions #}
+    <td class="px-6 py-4 text-right" @click.stop>
+        <div class="flex items-center justify-end gap-1">
+            <button hx-get="/admin/expenses/{{ expense.id }}/edit"
+                    hx-target="#expense-row-{{ expense.id }}"
+                    hx-swap="outerHTML"
+                    class="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors"
+                    title="Edit">
+                <span class="material-symbols-outlined text-[18px]">edit</span>
+            </button>
+            <button hx-delete="/admin/expenses/{{ expense.id }}"
+                    hx-target="#expense-row-{{ expense.id }}"
+                    hx-swap="outerHTML swap:300ms"
+                    hx-confirm="Delete this expense?"
+                    class="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors"
+                    title="Delete">
+                <span class="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+        </div>
+    </td>
+</tr>

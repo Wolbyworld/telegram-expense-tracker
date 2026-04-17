@@ -1,0 +1,68 @@
+<tr id="expense-row-{{ expense.id }}" class="border-t border-surface-container-low bg-primary/[0.02]">
+    <td class="px-6 py-3">
+        <span class="text-sm font-medium text-on-surface">
+            {{ expense.date.strftime('%b %d') }}
+        </span>
+    </td>
+
+    <td class="px-6 py-3">
+        <input type="text" name="vendor" value="{{ expense.vendor or '' }}" form="edit-form-{{ expense.id }}"
+               class="w-full bg-white rounded-lg px-3 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
+               placeholder="Vendor name">
+    </td>
+
+    <td class="px-6 py-3">
+        <select name="category" form="edit-form-{{ expense.id }}"
+                class="w-full bg-white rounded-lg px-3 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors appearance-none">
+            {% for cat in categories %}
+            <option value="{{ cat.value }}" {{ 'selected' if expense.category == cat.value else '' }}>{{ cat.value }}</option>
+            {% endfor %}
+        </select>
+    </td>
+
+    <td class="px-6 py-3 text-right">
+        <span class="text-sm font-semibold text-on-surface">
+            {% if expense.eur_amount is not none %}
+                &euro; {{ '{:,.2f}'.format(expense.eur_amount | float) }}
+            {% else %}
+                {{ expense.original_currency }} {{ '{:,.2f}'.format(expense.original_amount | float) }}
+            {% endif %}
+        </span>
+    </td>
+
+    <td class="px-6 py-3">
+        <div class="flex items-center gap-2">
+            {% for t in [('personal', 'Personal'), ('company', 'Company'), ('none', 'None')] %}
+            <label class="flex items-center gap-1 text-xs text-on-surface-variant cursor-pointer">
+                <input type="radio" name="expense_type" value="{{ t[0] }}" form="edit-form-{{ expense.id }}"
+                       {{ 'checked' if (expense.expense_type == t[0]) or (t[0] == 'none' and not expense.expense_type) else '' }}
+                       class="w-3.5 h-3.5 text-primary focus:ring-primary/20 border-outline-variant">
+                {{ t[1] }}
+            </label>
+            {% endfor %}
+        </div>
+    </td>
+
+    <td class="px-6 py-3 text-right">
+        <form id="edit-form-{{ expense.id }}" class="flex items-center justify-end gap-1">
+            <input type="hidden" name="description" value="{{ expense.description or '' }}">
+            <button type="submit"
+                    hx-patch="/admin/expenses/{{ expense.id }}"
+                    hx-target="#expense-row-{{ expense.id }}"
+                    hx-swap="outerHTML"
+                    hx-include="[form='edit-form-{{ expense.id }}']"
+                    class="p-1.5 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                    title="Save">
+                <span class="material-symbols-outlined text-[18px]">check</span>
+            </button>
+            <button type="button"
+                    hx-get="/admin/expenses/table"
+                    hx-target="#expense-table-body"
+                    hx-swap="innerHTML"
+                    class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+                    title="Cancel">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </form>
+    </td>
+</tr>

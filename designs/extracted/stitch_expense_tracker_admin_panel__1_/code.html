@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Expense Tracker - Schedules</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#c2ebe3",
+                        "on-tertiary-fixed-variant": "#773215",
+                        "on-primary-fixed": "#00201d",
+                        "on-surface": "#171d1c",
+                        "surface-tint": "#006a61",
+                        "on-secondary-fixed": "#00201d",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#dee4e1",
+                        "secondary": "#3f6560",
+                        "on-error": "#ffffff",
+                        "on-background": "#171d1c",
+                        "surface-dim": "#d6dbd9",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#456b66",
+                        "on-error-container": "#93000a",
+                        "background": "#f5faf8",
+                        "outline": "#6d7a77",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "on-primary-fixed-variant": "#005049",
+                        "surface": "#f5faf8",
+                        "tertiary": "#924628",
+                        "secondary-fixed": "#c2ebe3",
+                        "surface-bright": "#f5faf8",
+                        "surface-variant": "#dee4e1",
+                        "secondary-fixed-dim": "#a6cfc8",
+                        "inverse-primary": "#6bd8cb",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#fffbff",
+                        "primary-container": "#008378",
+                        "on-tertiary-fixed": "#370e00",
+                        "on-surface-variant": "#3d4947",
+                        "primary": "#00685f",
+                        "primary-fixed": "#89f5e7",
+                        "inverse-surface": "#2c3130",
+                        "tertiary-fixed": "#ffdbce",
+                        "surface-container-low": "#f0f5f2",
+                        "on-secondary-fixed-variant": "#274d48",
+                        "inverse-on-surface": "#edf2f0",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e4e9e7",
+                        "on-primary-container": "#f4fffc",
+                        "outline-variant": "#bcc9c6",
+                        "surface-container": "#eaefed",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#6bd8cb",
+                        "tertiary-container": "#b05e3d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4, h5, h6, .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+        
+        /* Ambient Shadow from Design System */
+        .ambient-shadow { box-shadow: 0px 12px 32px rgba(23, 29, 28, 0.06); }
+        
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen overflow-hidden flex">
+<!-- Shared Component: SideNavBar -->
+<nav class="flex flex-col h-screen fixed left-0 top-0 p-4 docked left-0 h-full w-64 border-r-0 tonal-shift-only bg-teal-50 dark:bg-slate-900 z-20">
+<div class="mb-8 pl-4 pt-4">
+<div class="text-teal-800 dark:text-teal-100 font-bold text-xl flex items-center gap-2">
+<span class="material-symbols-outlined fill text-2xl">account_balance_wallet</span>
+                Expense Tracker
+            </div>
+<div class="text-slate-500 text-xs mt-1 font-medium tracking-wide uppercase">Admin Panel</div>
+</div>
+<div class="flex-1 space-y-2 px-2 overflow-y-auto">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-teal-100/50 transition-colors scale-98-on-click transition-transform font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-teal-100/50 transition-colors scale-98-on-click transition-transform font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Expenses
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-teal-100/50 transition-colors scale-98-on-click transition-transform font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                Reports
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 font-bold shadow-sm scale-98-on-click transition-transform font-manrope text-sm" href="#">
+<span class="material-symbols-outlined fill">event_repeat</span>
+                Schedules
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-teal-100/50 transition-colors scale-98-on-click transition-transform font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</div>
+<div class="mt-auto px-2 pt-4">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-3 px-4 rounded-xl font-headline font-semibold flex justify-center items-center gap-2 mb-6 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span>
+                + New schedule
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-teal-100/50 transition-colors font-manrope text-sm font-medium" href="#">
+<img alt="Alvaro" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWAod8jz35glHkB04xaTOwFbh52AzE20q-M63QH5aU5-r2h0Q8J07ssC7oYYGaOZ0zAkKNjkNuGffBFeyLdJCyjLJx8SkiTsyuemtf7B0wukJLPt2FLMktDafsCk-6pwxJWoeSrfv0fq10w03AX0AQKdp1VwMDkqChSy870I9vQgA2bMGId8xv-RLzGjQX9GH-VA_G3dbFXi46TAo8cBELCCSDns9otoekdyHWBxh9NlwTzGQi1WUi2SbaOpFAGoNJdZBpv6IFfO5V"/>
+                Alvaro
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 ml-64 flex flex-col h-screen relative">
+<!-- Shared Component: TopAppBar -->
+<header class="flex justify-between items-center px-8 py-4 w-full bg-white dark:bg-slate-950 tonal-layering-surface-shift z-10 sticky top-0">
+<div>
+<!-- Brand hidden per JSON -->
+</div>
+<div class="flex items-center gap-4">
+<div class="relative bg-surface-container-low rounded-full px-4 py-2 flex items-center gap-2 hidden md:flex">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface w-48 font-body placeholder:text-on-surface-variant/50" placeholder="Search..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full text-slate-500 hover:text-teal-600 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 rounded-full text-slate-500 hover:text-teal-600 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="ml-2 bg-primary text-on-primary px-4 py-2 rounded-lg font-headline font-semibold text-sm hover:opacity-90 transition-opacity flex items-center gap-1">
+                        + New schedule
+                    </button>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<main class="flex-1 overflow-y-auto p-8 pb-24">
+<!-- Hero / Header Section -->
+<div class="mb-10 animate-[fadeIn_0.3s_ease-out_forwards]">
+<h1 class="text-3xl font-headline font-extrabold text-on-surface tracking-tight mb-2">Scheduled reports</h1>
+<p class="text-on-surface-variant font-body text-base">Automated report delivery</p>
+<!-- Stats Row -->
+<div class="mt-6 flex items-center gap-4 text-sm font-label text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="font-medium text-on-surface">4 active schedules</span>
+</div>
+<span class="text-outline-variant">•</span>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-base">schedule</span>
+<span>Next run in 2h 15m</span>
+</div>
+<span class="text-outline-variant">•</span>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-base">send</span>
+<span>12 reports sent this month</span>
+</div>
+</div>
+</div>
+<!-- Two Column Layout -->
+<div class="flex flex-col lg:flex-row gap-8 items-start">
+<!-- Left Column: New Schedule Form (40%) -->
+<div class="w-full lg:w-[40%] bg-surface-container-lowest rounded-xl p-6 ambient-shadow animate-[slideUp_0.4s_ease-out_forwards]">
+<h2 class="font-headline font-bold text-lg text-on-surface mb-6">New schedule</h2>
+<form class="space-y-6">
+<!-- Name Input -->
+<div>
+<label class="block font-label text-sm text-on-surface-variant mb-2">Schedule name</label>
+<input class="w-full bg-surface-container-highest border-none rounded-lg p-3 text-on-surface font-body text-sm focus:ring-0 focus:border-b-2 focus:border-b-primary transition-all rounded-b-none border-b-2 border-transparent" type="text" value="Monthly company expenses"/>
+</div>
+<!-- Frequency -->
+<div>
+<label class="block font-label text-sm text-on-surface-variant mb-2">Frequency</label>
+<div class="flex bg-surface-container-low rounded-lg p-1">
+<button class="flex-1 py-2 text-sm font-body text-on-surface-variant rounded-md hover:bg-surface-container transition-colors" type="button">Daily</button>
+<button class="flex-1 py-2 text-sm font-body text-on-surface-variant rounded-md hover:bg-surface-container transition-colors" type="button">Weekly</button>
+<button class="flex-1 py-2 text-sm font-body font-medium text-on-surface bg-surface-container-lowest shadow-sm rounded-md transition-colors" type="button">Monthly</button>
+</div>
+</div>
+<!-- Timing Grid -->
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block font-label text-sm text-on-surface-variant mb-2">Day selector</label>
+<div class="relative">
+<select class="w-full bg-surface-container-highest border-none rounded-lg p-3 text-on-surface font-body text-sm appearance-none pr-10 focus:ring-0 focus:border-b-2 focus:border-b-primary rounded-b-none border-b-2 border-transparent">
+<option>Day 1 of each month</option>
+<option>Last day of month</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div>
+<label class="block font-label text-sm text-on-surface-variant mb-2">Time</label>
+<input class="w-full bg-surface-container-highest border-none rounded-lg p-3 text-on-surface font-body text-sm focus:ring-0 focus:border-b-2 focus:border-b-primary rounded-b-none border-b-2 border-transparent" type="time" value="09:00"/>
+</div>
+</div>
+<div>
+<label class="block font-label text-sm text-on-surface-variant mb-2">Timezone</label>
+<div class="relative">
+<select class="w-full bg-surface-container-highest border-none rounded-lg p-3 text-on-surface font-body text-sm appearance-none pr-10 focus:ring-0 focus:border-b-2 focus:border-b-primary rounded-b-none border-b-2 border-transparent">
+<option>Europe/Madrid</option>
+<option>UTC</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">public</span>
+</div>
+</div>
+<!-- Filters Section -->
+<div class="bg-surface p-4 rounded-lg space-y-4">
+<h3 class="font-headline text-sm font-semibold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-base">filter_list</span>
+                                Data Filters
+                            </h3>
+<div class="grid grid-cols-2 gap-4">
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border-none rounded-md p-2.5 text-on-surface font-body text-sm appearance-none pr-8">
+<option>Previous month</option>
+<option>Current month</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2.5 text-on-surface-variant text-sm pointer-events-none">expand_more</span>
+</div>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border-none rounded-md p-2.5 text-on-surface font-body text-sm appearance-none pr-8">
+<option>Company</option>
+<option>Personal</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2.5 text-on-surface-variant text-sm pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Delivery -->
+<div class="space-y-4 pt-2">
+<h3 class="font-headline text-sm font-semibold text-on-surface">Delivery method</h3>
+<!-- Telegram Toggle -->
+<div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined text-sm">send</span>
+</div>
+<div>
+<div class="font-body text-sm font-medium text-on-surface">Telegram</div>
+<div class="font-label text-xs text-on-surface-variant">Send to your personal chat</div>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Email Toggle -->
+<div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-sm">mail</span>
+</div>
+<div>
+<div class="font-body text-sm font-medium text-on-surface">Email</div>
+<div class="font-label text-xs text-on-surface-variant">alvaro@luzia.com</div>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center justify-end gap-3 pt-6">
+<button class="px-5 py-2.5 rounded-xl font-headline font-semibold text-primary hover:bg-surface-container-low transition-colors text-sm" type="button">
+                                Cancel
+                            </button>
+<button class="px-5 py-2.5 rounded-xl font-headline font-semibold bg-gradient-to-br from-primary to-primary-container text-on-primary hover:opacity-90 transition-opacity text-sm shadow-sm" type="submit">
+                                Save schedule
+                            </button>
+</div>
+</form>
+</div>
+<!-- Right Column: List (60%) -->
+<div class="w-full lg:w-[60%] space-y-4 animate-[slideUp_0.5s_ease-out_forwards]">
+<div class="flex items-center justify-between mb-2">
+<h2 class="font-headline font-bold text-lg text-on-surface">Your schedules</h2>
+<button class="text-sm font-headline font-semibold text-primary hover:text-primary-container transition-colors">Filter</button>
+</div>
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-5 hover:bg-surface-container-low transition-colors group relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-xl"></div>
+<div class="flex justify-between items-start mb-3 pl-2">
+<div>
+<h3 class="font-headline font-bold text-base text-on-surface group-hover:text-primary transition-colors">Monthly company expenses</h3>
+<div class="flex items-center gap-2 mt-1 text-xs font-label text-on-surface-variant">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">Monthly</span>
+<span>•</span>
+<span>Day 1</span>
+<span>•</span>
+<span>09:00</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                                    ACTIVE
+                                </div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-7 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-4 mt-4 text-sm">
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">filter_alt</span>
+<span class="font-body truncate">Company, previous month</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">history</span>
+<span class="font-body">Last: Apr 1 2026</span>
+</div>
+</div>
+<div class="flex items-end justify-end">
+<div class="bg-surface px-3 py-2 rounded-lg flex items-center gap-2 text-primary font-medium text-sm">
+<span class="material-symbols-outlined text-base">calendar_clock</span>
+                                    Next: May 1 2026, 09:00
+                                </div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-5 hover:bg-surface-container-low transition-colors group relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-xl"></div>
+<div class="flex justify-between items-start mb-3 pl-2">
+<div>
+<h3 class="font-headline font-bold text-base text-on-surface group-hover:text-primary transition-colors">Weekly groceries digest</h3>
+<div class="flex items-center gap-2 mt-1 text-xs font-label text-on-surface-variant">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">Weekly</span>
+<span>•</span>
+<span>Monday</span>
+<span>•</span>
+<span>08:00</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                                    ACTIVE
+                                </div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-7 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-4 mt-4 text-sm">
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">filter_alt</span>
+<span class="font-body truncate">Groceries, past 7 days</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">history</span>
+<span class="font-body">Last: Apr 13 2026</span>
+</div>
+</div>
+<div class="flex items-end justify-end">
+<div class="bg-surface px-3 py-2 rounded-lg flex items-center gap-2 text-primary font-medium text-sm">
+<span class="material-symbols-outlined text-base">calendar_clock</span>
+                                    Next: Apr 20 2026, 08:00
+                                </div>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-5 hover:bg-surface-container-low transition-colors group relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-xl"></div>
+<div class="flex justify-between items-start mb-3 pl-2">
+<div>
+<h3 class="font-headline font-bold text-base text-on-surface group-hover:text-primary transition-colors">Daily summary</h3>
+<div class="flex items-center gap-2 mt-1 text-xs font-label text-on-surface-variant">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">Daily</span>
+<span>•</span>
+<span>22:00</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                                    ACTIVE
+                                </div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-7 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-4 mt-4 text-sm">
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">filter_alt</span>
+<span class="font-body truncate">All expenses today</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">history</span>
+<span class="font-body">Last: Apr 16 2026</span>
+</div>
+</div>
+<div class="flex items-end justify-end">
+<div class="bg-surface px-3 py-2 rounded-lg flex items-center gap-2 text-primary font-medium text-sm">
+<span class="material-symbols-outlined text-base">calendar_clock</span>
+                                    Next: Apr 17 2026, 22:00
+                                </div>
+</div>
+</div>
+</div>
+<!-- Card 4 (Paused) -->
+<div class="bg-surface-container-lowest rounded-xl p-5 hover:bg-surface-container-low transition-colors group relative overflow-hidden opacity-75">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-outline-variant rounded-l-xl"></div>
+<div class="flex justify-between items-start mb-3 pl-2">
+<div>
+<h3 class="font-headline font-bold text-base text-on-surface-variant">Q1 business travel report</h3>
+<div class="flex items-center gap-2 mt-1 text-xs font-label text-on-surface-variant">
+<span class="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">Quarterly</span>
+<span>•</span>
+<span>Day 1</span>
+<span>•</span>
+<span>10:00</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                                    PAUSED
+                                </div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-7 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-4 mt-4 text-sm">
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">filter_alt</span>
+<span class="font-body truncate">Travel, Company, previous quarter</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-base">history</span>
+<span class="font-body">Last: Apr 1 2026</span>
+</div>
+</div>
+<div class="flex items-end justify-end">
+<div class="bg-surface px-3 py-2 rounded-lg flex items-center gap-2 text-on-surface-variant font-medium text-sm">
+<span class="material-symbols-outlined text-base">calendar_clock</span>
+                                    Next: Jul 1 2026, 10:00
+                                </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,172 @@
+{% extends "admin/base.html" %}
+{% block title %}Reports — Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-4xl font-extrabold text-on-surface font-headline tracking-tight">Reports</h1>
+    <p class="text-on-surface-variant mt-2 text-base">Generate PDF and CSV expense reports</p>
+</div>
+
+<div x-data="reportPage()" class="flex flex-col gap-8 pb-24">
+
+    <!-- NL Input Section -->
+    <div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">auto_awesome</span>
+            <h2 class="text-lg font-bold text-on-surface font-headline">Ask in natural language</h2>
+        </div>
+        <form hx-post="/admin/reports/nl-query"
+              hx-target="#filter-form"
+              hx-swap="outerHTML"
+              hx-indicator="#nl-spinner"
+              class="flex gap-3">
+            <div class="flex-1 relative">
+                <input type="text"
+                       name="query"
+                       x-model="nlQuery"
+                       placeholder="e.g., company expenses in March 2026, or all groceries last quarter..."
+                       class="w-full border border-outline-variant rounded-lg px-4 py-3 text-sm text-on-surface placeholder:text-outline bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors font-body">
+            </div>
+            <button type="submit"
+                    class="bg-primary hover:bg-primary-container text-on-primary px-6 py-3 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap flex items-center gap-2">
+                <span id="nl-spinner" class="htmx-indicator material-symbols-outlined animate-spin text-base">progress_activity</span>
+                Resolve filter
+            </button>
+        </form>
+
+        <!-- Suggestion Chips -->
+        <div class="flex flex-wrap gap-2 mt-4">
+            <span class="text-xs text-on-surface-variant font-medium uppercase tracking-wider mr-1 self-center">Suggestions</span>
+            {% set suggestions = [
+                "This month's company expenses",
+                "Last quarter groceries",
+                "Q1 business travel",
+            ] %}
+            {% for s in suggestions %}
+            <button type="button"
+                    @click="nlQuery = '{{ s }}'; $nextTick(() => $el.closest('.bg-surface-container-lowest').querySelector('form').requestSubmit())"
+                    class="px-3 py-1.5 bg-surface-container-high rounded-full text-xs font-medium text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer">
+                {{ s }}
+            </button>
+            {% endfor %}
+        </div>
+
+        <p class="text-[11px] text-outline mt-3 flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs" style="font-size: 14px">smart_toy</span>
+            Powered by GPT-5.4-mini
+        </p>
+    </div>
+
+    <!-- Two-column: Filter Builder + Preview -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Filter Builder (2 cols) -->
+        <div class="lg:col-span-2">
+            {% include "admin/reports/_filter_form.html" %}
+        </div>
+
+        <!-- Preview Panel (1 col) -->
+        <div>
+            <div id="preview-panel">
+                {% include "admin/reports/_preview.html" %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Action Bar -->
+    <div class="fixed bottom-0 left-64 right-0 bg-white/95 backdrop-blur-md border-t border-outline-variant px-8 py-4 z-30 flex items-center justify-between">
+        <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-base">inventory_2</span>
+            <span>Ready to export <strong class="text-on-surface" id="export-count" x-text="previewCount + ' expenses'">0 expenses</strong></span>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="button"
+                    @click="submitGenerate('csv')"
+                    class="border border-outline-variant text-on-surface hover:bg-surface-container px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">table_chart</span>
+                Generate CSV
+            </button>
+            <button type="button"
+                    @click="submitGenerate('pdf')"
+                    class="bg-primary hover:bg-primary-container text-on-primary px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">picture_as_pdf</span>
+                Generate PDF
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function reportPage() {
+    return {
+        nlQuery: '',
+        previewCount: 0,
+
+        init() {
+            // Listen for preview updates via HTMX
+            document.body.addEventListener('previewUpdated', (e) => {
+                if (e.detail && e.detail.count !== undefined) {
+                    this.previewCount = e.detail.count;
+                }
+            });
+            // Trigger initial preview
+            this.$nextTick(() => this.triggerPreview());
+        },
+
+        triggerPreview() {
+            const form = document.getElementById('filter-form');
+            if (form) {
+                htmx.ajax('POST', '/admin/reports/preview', {
+                    source: form,
+                    target: '#preview-panel',
+                    swap: 'innerHTML',
+                    values: this.getFilterValues(),
+                });
+            }
+        },
+
+        getFilterValues() {
+            const form = document.getElementById('filter-form');
+            if (!form) return {};
+            const fd = new FormData(form);
+            const obj = {};
+            for (const [k, v] of fd.entries()) {
+                obj[k] = v;
+            }
+            return obj;
+        },
+
+        submitGenerate(format) {
+            const form = document.getElementById('filter-form');
+            if (!form) return;
+            // Create a hidden form to submit as a regular POST for file download
+            const hiddenForm = document.createElement('form');
+            hiddenForm.method = 'POST';
+            hiddenForm.action = '/admin/reports/generate';
+            hiddenForm.style.display = 'none';
+
+            // Add format
+            const fmtInput = document.createElement('input');
+            fmtInput.name = 'format';
+            fmtInput.value = format;
+            hiddenForm.appendChild(fmtInput);
+
+            // Copy all filter form values
+            const fd = new FormData(form);
+            for (const [k, v] of fd.entries()) {
+                const input = document.createElement('input');
+                input.name = k;
+                input.value = v;
+                hiddenForm.appendChild(input);
+            }
+
+            document.body.appendChild(hiddenForm);
+            hiddenForm.submit();
+            hiddenForm.remove();
+        },
+    }
+}
+</script>
+{% endblock %}

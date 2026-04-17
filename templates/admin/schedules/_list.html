@@ -1,0 +1,135 @@
+{% if schedules %}
+<div class="space-y-4">
+    {% for s in schedules %}
+    <div id="schedule-card-{{ s.id }}"
+         class="bg-white rounded-2xl shadow-ambient border border-outline-variant/30 p-5 transition-all hover:shadow-lg">
+        <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-3">
+                <!-- Frequency badge -->
+                {% if s.frequency == 'daily' %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700">
+                    Daily
+                </span>
+                {% elif s.frequency == 'weekly' %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-sky-100 text-sky-700">
+                    Weekly
+                </span>
+                {% elif s.frequency == 'monthly' %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-violet-100 text-violet-700">
+                    Monthly
+                </span>
+                {% endif %}
+
+                <!-- Active / Paused badge -->
+                {% if s.is_active %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                    Active
+                </span>
+                {% else %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+                    <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                    Paused
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-1">
+                <button hx-post="/admin/schedules/{{ s.id }}/toggle" hx-target="#schedule-list" hx-swap="innerHTML"
+                        class="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+                        title="{{ 'Pause' if s.is_active else 'Resume' }}">
+                    <span class="material-symbols-outlined text-[20px]">
+                        {{ 'pause_circle' if s.is_active else 'play_circle' }}
+                    </span>
+                </button>
+                <button hx-get="/admin/schedules/{{ s.id }}/edit" hx-target="#schedule-card-{{ s.id }}" hx-swap="outerHTML"
+                        class="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+                        title="Edit">
+                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button hx-delete="/admin/schedules/{{ s.id }}" hx-target="#schedule-card-{{ s.id }}" hx-swap="outerHTML"
+                        hx-confirm="Delete this schedule?"
+                        class="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error-container/30 transition-colors"
+                        title="Delete">
+                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Schedule details -->
+        <div class="space-y-2 text-sm">
+            <!-- Timing info -->
+            <div class="flex items-center gap-2 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px]">schedule</span>
+                <span>
+                    {% if s.frequency == 'daily' %}
+                        Every day at {{ s.time_utc.strftime('%H:%M') }}
+                    {% elif s.frequency == 'weekly' %}
+                        {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                        Every {{ days[s.day_of_week or 0] }} at {{ s.time_utc.strftime('%H:%M') }}
+                    {% elif s.frequency == 'monthly' %}
+                        Day {{ s.day_of_month or 1 }} of each month at {{ s.time_utc.strftime('%H:%M') }}
+                    {% endif %}
+                    <span class="text-outline">({{ s.timezone }})</span>
+                </span>
+            </div>
+
+            <!-- Filters -->
+            {% if s.filters %}
+            <div class="flex items-center gap-2 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px]">filter_alt</span>
+                <span>
+                    {% if s.filters.get('expense_type') %}{{ s.filters['expense_type'] | capitalize }}{% endif %}
+                    {% if s.filters.get('category') %} / {{ s.filters['category'] }}{% endif %}
+                    {% if not s.filters.get('expense_type') and not s.filters.get('category') %}No filters{% endif %}
+                </span>
+            </div>
+            {% endif %}
+
+            <!-- Delivery -->
+            <div class="flex items-center gap-2 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px]">send</span>
+                <span class="flex items-center gap-2">
+                    {% if s.send_telegram %}
+                    <span class="inline-flex items-center gap-1">Telegram</span>
+                    {% endif %}
+                    {% if s.email %}
+                    {% if s.send_telegram %}<span class="text-outline">&middot;</span>{% endif %}
+                    <span class="inline-flex items-center gap-1">{{ s.email }}</span>
+                    {% endif %}
+                    {% if not s.send_telegram and not s.email %}
+                    <span class="text-outline italic">No delivery method</span>
+                    {% endif %}
+                </span>
+            </div>
+
+            <!-- Last / next run -->
+            <div class="flex items-center gap-4 pt-1 text-xs text-outline">
+                {% if s.last_run_at %}
+                <span class="flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">history</span>
+                    Last: {{ s.last_run_at.strftime('%b %d, %Y %H:%M') }}
+                </span>
+                {% endif %}
+                {% if s.next_run_at %}
+                <span class="flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">update</span>
+                    Next: {{ s.next_run_at.strftime('%b %d, %Y %H:%M') }}
+                </span>
+                {% endif %}
+                {% if not s.last_run_at and not s.next_run_at %}
+                <span class="italic">Not yet scheduled</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-2xl shadow-ambient border border-outline-variant/30 p-10 text-center">
+    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-3">event_repeat</span>
+    <p class="text-on-surface-variant font-medium">No schedules yet</p>
+    <p class="text-sm text-outline mt-1">Create your first automated report schedule</p>
+</div>
+{% endif %}

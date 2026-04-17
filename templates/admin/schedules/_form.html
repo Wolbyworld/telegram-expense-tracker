@@ -1,0 +1,159 @@
+<!-- Inline edit form — replaces a schedule card via HTMX -->
+<div id="schedule-card-{{ schedule.id }}"
+     x-data="{
+        frequency: '{{ schedule.frequency }}',
+        emailEnabled: {{ 'true' if schedule.email else 'false' }},
+        sendTelegram: {{ 'true' if schedule.send_telegram else 'false' }},
+        showFilters: {{ 'true' if schedule.filters else 'false' }},
+     }"
+     class="bg-white rounded-2xl shadow-ambient border-2 border-primary/30 p-5">
+
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-on-surface font-headline">Edit schedule #{{ schedule.id }}</h3>
+        <button hx-get="/admin/schedules" hx-target="#schedule-list" hx-swap="innerHTML" hx-select="#schedule-list > *"
+                class="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+                title="Cancel">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+    </div>
+
+    <form hx-patch="/admin/schedules/{{ schedule.id }}" hx-target="#schedule-list" hx-swap="innerHTML"
+          class="space-y-4">
+
+        <!-- Frequency -->
+        <div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Frequency</label>
+            <div class="flex bg-surface-container rounded-xl p-1 gap-1">
+                <template x-for="f in ['daily', 'weekly', 'monthly']" :key="f">
+                    <button type="button" @click="frequency = f"
+                            :class="frequency === f
+                                ? 'bg-primary text-on-primary shadow-sm'
+                                : 'text-on-surface-variant hover:text-on-surface'"
+                            class="flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold capitalize transition-all duration-150"
+                            x-text="f">
+                    </button>
+                </template>
+            </div>
+            <input type="hidden" name="frequency" :value="frequency">
+        </div>
+
+        <!-- Day of week -->
+        <div x-show="frequency === 'weekly'" x-transition>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Day of week</label>
+            <select name="day_of_week"
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                {% for d in range(7) %}
+                <option value="{{ d }}" {{ 'selected' if schedule.day_of_week == d else '' }}>{{ days[d] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Day of month -->
+        <div x-show="frequency === 'monthly'" x-transition>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Day of month</label>
+            <select name="day_of_month"
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                {% for d in range(1, 29) %}
+                <option value="{{ d }}" {{ 'selected' if schedule.day_of_month == d else '' }}>Day {{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Time -->
+        <div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Time</label>
+            <input type="time" name="time_utc" value="{{ schedule.time_utc.strftime('%H:%M') }}"
+                   class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+        </div>
+
+        <!-- Timezone -->
+        <div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Timezone</label>
+            <select name="timezone"
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                {% set tz_options = ['Europe/Madrid', 'UTC', 'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney'] %}
+                {% for tz in tz_options %}
+                <option value="{{ tz }}" {{ 'selected' if schedule.timezone == tz else '' }}>{{ tz }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Data filters -->
+        <div>
+            <button type="button" @click="showFilters = !showFilters"
+                    class="flex items-center gap-2 text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors w-full">
+                <span class="material-symbols-outlined text-[16px] transition-transform duration-200"
+                      :class="showFilters ? 'rotate-90' : ''">chevron_right</span>
+                Data filters
+            </button>
+            <div x-show="showFilters" x-transition class="mt-2 space-y-2 pl-1">
+                <div>
+                    <label class="block text-xs font-medium text-on-surface-variant mb-1">Expense type</label>
+                    <select name="expense_type"
+                            class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                        <option value="all" {{ 'selected' if not schedule.filters or schedule.filters.get('expense_type', 'all') == 'all' else '' }}>All expenses</option>
+                        <option value="personal" {{ 'selected' if schedule.filters and schedule.filters.get('expense_type') == 'personal' else '' }}>Personal</option>
+                        <option value="company" {{ 'selected' if schedule.filters and schedule.filters.get('expense_type') == 'company' else '' }}>Company</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-on-surface-variant mb-1">Category</label>
+                    <input type="text" name="category"
+                           value="{{ schedule.filters.get('category', '') if schedule.filters else '' }}"
+                           placeholder="e.g. groceries, dining"
+                           class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline">
+                </div>
+            </div>
+        </div>
+
+        <!-- Delivery -->
+        <div class="space-y-2">
+            <label class="block text-xs font-medium text-on-surface-variant">Delivery method</label>
+
+            <label class="flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px] text-primary">send</span>
+                    <span class="text-sm text-on-surface">Telegram</span>
+                </div>
+                <div class="relative">
+                    <input type="hidden" name="send_telegram" value="false">
+                    <input type="checkbox" name="send_telegram" value="true" x-model="sendTelegram" class="sr-only peer">
+                    <div class="w-9 h-5 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                    <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                </div>
+            </label>
+
+            <label class="flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px] text-primary">email</span>
+                    <span class="text-sm text-on-surface">Email</span>
+                </div>
+                <div class="relative">
+                    <input type="hidden" name="email_enabled" value="false">
+                    <input type="checkbox" name="email_enabled" value="true" x-model="emailEnabled" class="sr-only peer">
+                    <div class="w-9 h-5 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                    <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                </div>
+            </label>
+
+            <div x-show="emailEnabled" x-transition class="pl-7">
+                <input type="email" name="email" value="{{ schedule.email or '' }}" placeholder="you@example.com"
+                       class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline">
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2 pt-1">
+            <button type="submit"
+                    class="flex-1 bg-primary hover:bg-primary-container text-on-primary py-2 px-4 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+                Save changes
+            </button>
+            <button type="button"
+                    hx-get="/admin/schedules" hx-target="#schedule-list" hx-swap="innerHTML" hx-select="#schedule-list > *"
+                    class="px-3 py-2 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors">
+                Cancel
+            </button>
+        </div>
+    </form>
+</div>

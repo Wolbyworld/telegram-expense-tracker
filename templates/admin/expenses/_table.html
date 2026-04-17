@@ -1,0 +1,129 @@
+{% set category_colors = {
+    'Food': 'bg-amber-50 text-amber-700',
+    'Transport': 'bg-sky-50 text-sky-700',
+    'Accommodation': 'bg-violet-50 text-violet-700',
+    'Entertainment': 'bg-pink-50 text-pink-700',
+    'Shopping': 'bg-rose-50 text-rose-700',
+    'Communication': 'bg-indigo-50 text-indigo-700',
+    'Office': 'bg-slate-100 text-slate-700',
+    'Health': 'bg-emerald-50 text-emerald-700',
+    'Other': 'bg-stone-100 text-stone-600',
+    'Groceries': 'bg-teal-50 text-teal-700',
+    'Food & Dining': 'bg-orange-50 text-orange-700',
+    'Software': 'bg-blue-50 text-blue-700',
+} %}
+
+{% set category_icons = {
+    'Food': 'restaurant',
+    'Transport': 'directions_car',
+    'Accommodation': 'hotel',
+    'Entertainment': 'movie',
+    'Shopping': 'shopping_bag',
+    'Communication': 'chat',
+    'Office': 'work',
+    'Health': 'health_and_safety',
+    'Other': 'more_horiz',
+    'Groceries': 'local_grocery_store',
+    'Food & Dining': 'restaurant',
+    'Software': 'code',
+} %}
+
+{% set vendor_icons = {
+    'mercadona': 'local_grocery_store',
+    'carrefour': 'local_grocery_store',
+    'uber': 'local_taxi',
+    'starbucks': 'local_cafe',
+    'aws': 'cloud',
+    'amazon': 'shopping_cart',
+} %}
+
+{% if expenses %}
+    {% for expense in expenses %}
+    {% include "admin/expenses/_row.html" %}
+    {% endfor %}
+{% else %}
+    <tr>
+        <td colspan="6" class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3 text-on-surface-variant">
+                <span class="material-symbols-outlined text-4xl text-outline-variant">receipt_long</span>
+                <p class="text-sm">No expenses found</p>
+                <p class="text-xs text-outline">Try adjusting your filters</p>
+            </div>
+        </td>
+    </tr>
+{% endif %}
+
+{# Pagination #}
+{% if expenses %}
+<tr>
+    <td colspan="6" class="px-6 py-4">
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-on-surface-variant">
+                Showing {{ (page - 1) * per_page + 1 }}–{{ [page * per_page, total] | min }} of {{ total }}
+            </p>
+            <div class="flex items-center gap-2">
+                {# Per-page selector #}
+                <div class="relative" x-data="{ ppOpen: false }">
+                    <button @click="ppOpen = !ppOpen"
+                            class="flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface transition-colors">
+                        {{ per_page }} per page
+                        <span class="material-symbols-outlined text-[16px]">expand_more</span>
+                    </button>
+                    <div x-show="ppOpen" @click.outside="ppOpen = false" x-transition
+                         class="absolute bottom-full right-0 mb-1 bg-white rounded-xl shadow-ambient py-1 z-50 min-w-[100px]">
+                        {% for pp in [10, 25, 50, 100] %}
+                        <button @click="ppOpen = false; $dispatch('change-per-page', { value: {{ pp }} })"
+                                hx-get="/admin/expenses/table"
+                                hx-target="#expense-table-body"
+                                hx-swap="innerHTML"
+                                hx-vals='{"per_page": {{ pp }}, "page": 1, "sort": "{{ sort }}", "dir": "{{ dir }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "category": "{{ category }}", "expense_type": "{{ expense_type }}", "vendor": "{{ vendor }}"}'
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-surface-container-low transition-colors {{ 'text-primary font-semibold' if pp == per_page else 'text-on-surface' }}">
+                            {{ pp }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# Page numbers #}
+                <div class="flex items-center gap-1 ml-4">
+                    {% if page > 1 %}
+                    <button hx-get="/admin/expenses/table"
+                            hx-target="#expense-table-body"
+                            hx-swap="innerHTML"
+                            hx-vals='{"page": {{ page - 1 }}, "per_page": {{ per_page }}, "sort": "{{ sort }}", "dir": "{{ dir }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "category": "{{ category }}", "expense_type": "{{ expense_type }}", "vendor": "{{ vendor }}"}'
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    {% endif %}
+
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                        <span class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold bg-primary text-on-primary">{{ p }}</span>
+                        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+                        <button hx-get="/admin/expenses/table"
+                                hx-target="#expense-table-body"
+                                hx-swap="innerHTML"
+                                hx-vals='{"page": {{ p }}, "per_page": {{ per_page }}, "sort": "{{ sort }}", "dir": "{{ dir }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "category": "{{ category }}", "expense_type": "{{ expense_type }}", "vendor": "{{ vendor }}"}'
+                                class="w-8 h-8 flex items-center justify-center rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors">
+                            {{ p }}
+                        </button>
+                        {% elif p == 4 or p == total_pages - 2 %}
+                        <span class="text-on-surface-variant text-sm px-1">...</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                    <button hx-get="/admin/expenses/table"
+                            hx-target="#expense-table-body"
+                            hx-swap="innerHTML"
+                            hx-vals='{"page": {{ page + 1 }}, "per_page": {{ per_page }}, "sort": "{{ sort }}", "dir": "{{ dir }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "category": "{{ category }}", "expense_type": "{{ expense_type }}", "vendor": "{{ vendor }}"}'
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </td>
+</tr>
+{% endif %}

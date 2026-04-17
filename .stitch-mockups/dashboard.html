@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Expense Tracker - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#006a61",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#00201d",
+                        "on-secondary-fixed-variant": "#274d48",
+                        "secondary-fixed": "#c2ebe3",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#6bd8cb",
+                        "surface-container-low": "#f0f5f2",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#fffbff",
+                        "on-tertiary-fixed-variant": "#773215",
+                        "on-primary-fixed": "#00201d",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e4e9e7",
+                        "on-background": "#171d1c",
+                        "tertiary": "#924628",
+                        "inverse-on-surface": "#edf2f0",
+                        "error": "#ba1a1a",
+                        "outline": "#6d7a77",
+                        "secondary": "#3f6560",
+                        "on-surface-variant": "#3d4947",
+                        "surface-bright": "#f5faf8",
+                        "on-tertiary-fixed": "#370e00",
+                        "inverse-primary": "#6bd8cb",
+                        "surface": "#f5faf8",
+                        "secondary-fixed-dim": "#a6cfc8",
+                        "inverse-surface": "#2c3130",
+                        "tertiary-container": "#b05e3d",
+                        "on-primary-fixed-variant": "#005049",
+                        "surface-variant": "#dee4e1",
+                        "outline-variant": "#bcc9c6",
+                        "tertiary-fixed": "#ffdbce",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "on-secondary-container": "#456b66",
+                        "primary-fixed": "#89f5e7",
+                        "secondary-container": "#c2ebe3",
+                        "primary-container": "#008378",
+                        "on-surface": "#171d1c",
+                        "surface-container-highest": "#dee4e1",
+                        "surface-container": "#eaefed",
+                        "on-error": "#ffffff",
+                        "on-primary-container": "#f4fffc",
+                        "background": "#f5faf8",
+                        "primary": "#00685f",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d6dbd9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4, h5, h6, .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .shadow-ambient { box-shadow: 0px 12px 32px rgba(23, 29, 28, 0.06); }
+    </style>
+</head>
+<body class="bg-surface text-on-background antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50">
+<!-- Brand -->
+<div class="px-6 py-6 border-b border-slate-100 dark:border-slate-800/50">
+<div class="text-teal-700 dark:text-teal-400 font-extrabold text-xl flex items-center gap-2 font-headline tracking-tight">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+                Expense Tracker
+            </div>
+<p class="text-xs text-on-surface-variant mt-1 font-label">Wealth Management</p>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 py-6 overflow-y-auto">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-teal-700 dark:text-teal-400 font-bold bg-teal-50/50 dark:bg-teal-900/20 rounded-r-full font-manrope text-sm font-medium scale-95 duration-150 ease-in-out transition-transform" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                        Dashboard
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 font-manrope text-sm font-medium rounded-r-full" href="#">
+<span class="material-symbols-outlined">payments</span>
+                        Expenses
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 font-manrope text-sm font-medium rounded-r-full" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+                        Reports
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 font-manrope text-sm font-medium rounded-r-full" href="#">
+<span class="material-symbols-outlined">event_repeat</span>
+                        Schedules
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 font-manrope text-sm font-medium rounded-r-full" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</div>
+<!-- Footer Profile -->
+<div class="px-4 py-4 border-t border-slate-100 dark:border-slate-800/50">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 font-manrope text-sm font-medium rounded-xl" href="#">
+<span class="material-symbols-outlined">account_circle</span>
+                Alvaro
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col h-screen relative">
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shadow-sm dark:shadow-none flex justify-between items-center px-8 transition-opacity duration-200">
+<div class="flex-1 flex items-center">
+<!-- Search could go here if implemented -->
+</div>
+<div class="flex items-center gap-4">
+<button class="text-slate-500 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 p-2 rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-500 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 p-2 rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-sm overflow-hidden">
+<img alt="Alvaro profile avatar" class="w-full h-full object-cover" data-alt="Close up portrait of a young professional man with a slight smile, wearing a casual shirt, bright lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnwG1rsDq6a2lk5kq4DP5Ty8TTzkb3-KsZAluAzggbLLn9LC6-dsG7_KzaXMQRFKuuzINnIe7t8Z_WqBQrI9I0iHggvLos3_K_k-rkAWqTYV05zDYsGXHKPEBTTRF26Aq6o3F3WhuKduLiWiM3vdBRMJk3y5P_44YFaifKl-ogKYBOfbMLW_0KTr3vqo04Qj3wMUqW-5vgZeuQSaR7Sfrl_n9EG6I7sgLOSuZdsZhw0UYvhp5rVDF2Rzz48aNwIan6dszio7peRTsD"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Canvas -->
+<div class="flex-1 overflow-y-auto pt-24 pb-12 px-8 lg:px-12 bg-surface">
+<!-- Page Header -->
+<div class="mb-10">
+<h1 class="text-4xl font-extrabold text-on-surface font-headline tracking-tight">Dashboard</h1>
+<p class="text-on-surface-variant mt-2 text-base font-body">Overview of your spending</p>
+</div>
+<!-- Bento Grid Layout -->
+<div class="flex flex-col gap-8">
+<!-- Row 1: Stat Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-medium text-sm font-label">Total this month</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">account_balance_wallet</span>
+</div>
+<div>
+<div class="text-3xl font-bold text-on-surface font-headline tracking-tight">€2,847.50</div>
+<div class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-xs font-semibold">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+                                +12%
+                            </div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-medium text-sm font-label">Total this week</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">calendar_view_week</span>
+</div>
+<div>
+<div class="text-3xl font-bold text-on-surface font-headline tracking-tight">€412.80</div>
+<div class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-error-container text-on-error-container text-xs font-semibold">
+<span class="material-symbols-outlined text-[14px]">trending_down</span>
+                                -5%
+                            </div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-medium text-sm font-label">Expense count</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">receipt</span>
+</div>
+<div>
+<div class="text-3xl font-bold text-on-surface font-headline tracking-tight">47</div>
+<div class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-container-high text-on-surface text-xs font-semibold">
+<span class="material-symbols-outlined text-[14px]">add</span>
+                                +8 this month
+                            </div>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-medium text-sm font-label">Avg expense</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">analytics</span>
+</div>
+<div>
+<div class="text-3xl font-bold text-on-surface font-headline tracking-tight">€60.58</div>
+<div class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-xs font-semibold">
+<span class="material-symbols-outlined text-[14px]">trending_down</span>
+                                -3%
+                            </div>
+</div>
+</div>
+</div>
+<!-- Row 2: Charts -->
+<div class="flex flex-col lg:flex-row gap-6">
+<!-- Line Chart Area -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient lg:w-[60%] flex flex-col min-h-[320px]">
+<h3 class="text-lg font-bold text-on-surface font-headline mb-6">Monthly trend</h3>
+<!-- Simulated Chart Area -->
+<div class="flex-1 relative w-full flex items-end pt-4 pb-8 border-b border-outline-variant/15">
+<!-- Y-axis labels -->
+<div class="absolute left-0 top-0 bottom-8 w-12 flex flex-col justify-between text-xs text-on-surface-variant/70 font-label">
+<span>€3k</span>
+<span>€2k</span>
+<span>€1k</span>
+<span>0</span>
+</div>
+<!-- Graph container -->
+<div class="ml-12 flex-1 h-full relative overflow-hidden">
+<!-- Grid lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none">
+<div class="w-full h-px bg-outline-variant/10"></div>
+<div class="w-full h-px bg-outline-variant/10"></div>
+<div class="w-full h-px bg-outline-variant/10"></div>
+<div class="w-full h-px bg-transparent"></div>
+</div>
+<!-- Fake Line/Area Chart using CSS -->
+<div class="absolute bottom-0 left-0 right-0 h-full w-full flex items-end">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#00685f" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#00685f" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,100 L0,70 Q10,60 20,65 T40,50 T60,80 T80,30 T100,40 L100,100 Z" fill="url(#chartGradient)"></path>
+<path d="M0,70 Q10,60 20,65 T40,50 T60,80 T80,30 T100,40" fill="none" stroke="#00685f" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- X-axis labels -->
+<div class="ml-12 mt-2 flex justify-between text-xs text-on-surface-variant/70 font-label">
+<span>Nov</span>
+<span>Dec</span>
+<span>Jan</span>
+<span>Feb</span>
+<span>Mar</span>
+<span>Apr</span>
+</div>
+</div>
+<!-- Doughnut Chart Area -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient lg:w-[40%] flex flex-col">
+<h3 class="text-lg font-bold text-on-surface font-headline mb-6">By category</h3>
+<div class="flex-1 flex flex-col justify-center gap-6">
+<!-- Visual Ring (Simulated) -->
+<div class="relative w-40 h-40 mx-auto">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#f0f5f2" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#00685f" stroke-dasharray="32 68" stroke-dashoffset="0" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#008378" stroke-dasharray="18 82" stroke-dashoffset="-32" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#6bd8cb" stroke-dasharray="15 85" stroke-dashoffset="-50" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#c2ebe3" stroke-dasharray="12 88" stroke-dashoffset="-65" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#3f6560" stroke-dasharray="10 90" stroke-dashoffset="-77" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.91549430918954" stroke="#bcc9c6" stroke-dasharray="13 87" stroke-dashoffset="-87" stroke-width="4"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center flex-col">
+<span class="text-xs text-on-surface-variant font-label">Top</span>
+<span class="text-lg font-bold text-on-surface font-headline leading-tight">Food</span>
+</div>
+</div>
+<!-- Legend -->
+<div class="grid grid-cols-2 gap-x-4 gap-y-3 mt-4">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary"></div>
+<span class="text-sm text-on-surface-variant">Food &amp; Dining <span class="font-semibold text-on-surface">32%</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary-container"></div>
+<span class="text-sm text-on-surface-variant">Transport <span class="font-semibold text-on-surface">18%</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-inverse-primary"></div>
+<span class="text-sm text-on-surface-variant">Groceries <span class="font-semibold text-on-surface">15%</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary-container"></div>
+<span class="text-sm text-on-surface-variant">Entertainment <span class="font-semibold text-on-surface">12%</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary"></div>
+<span class="text-sm text-on-surface-variant">Shopping <span class="font-semibold text-on-surface">10%</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-outline-variant"></div>
+<span class="text-sm text-on-surface-variant">Other <span class="font-semibold text-on-surface">13%</span></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 3: Panels -->
+<div class="flex flex-col lg:flex-row gap-6 pb-8">
+<!-- Recent Expenses Table List -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient lg:w-[60%] flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-on-surface font-headline">Recent expenses</h3>
+<a class="text-primary font-medium text-sm hover:underline font-label" href="#">View all</a>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Item 1 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+<span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+</div>
+<div>
+<div class="font-semibold text-on-surface text-sm">Mercadona</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Apr 24, 2024</div>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-2.5 py-1 rounded bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium hidden sm:inline-block">Groceries</span>
+<span class="font-bold text-on-surface tabular-nums">€45.20</span>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+<span class="material-symbols-outlined text-[20px]">directions_car</span>
+</div>
+<div>
+<div class="font-semibold text-on-surface text-sm">Uber</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Apr 23, 2024</div>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-2.5 py-1 rounded bg-surface-variant text-on-surface-variant text-xs font-medium hidden sm:inline-block">Transport</span>
+<span class="font-bold text-on-surface tabular-nums">€12.50</span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+<span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+</div>
+<div>
+<div class="font-semibold text-on-surface text-sm">Carrefour</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Apr 21, 2024</div>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-2.5 py-1 rounded bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium hidden sm:inline-block">Groceries</span>
+<span class="font-bold text-on-surface tabular-nums">€78.90</span>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+<span class="material-symbols-outlined text-[20px]">restaurant</span>
+</div>
+<div>
+<div class="font-semibold text-on-surface text-sm">Starbucks</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Apr 20, 2024</div>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-2.5 py-1 rounded bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium hidden sm:inline-block">Food &amp; Dining</span>
+<span class="font-bold text-on-surface tabular-nums">€4.80</span>
+</div>
+</div>
+<!-- Item 5 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+<span class="material-symbols-outlined text-[20px]">local_gas_station</span>
+</div>
+<div>
+<div class="font-semibold text-on-surface text-sm">Shell</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Apr 18, 2024</div>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-2.5 py-1 rounded bg-surface-variant text-on-surface-variant text-xs font-medium hidden sm:inline-block">Transport</span>
+<span class="font-bold text-on-surface tabular-nums">€52.00</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Currency Breakdown -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient lg:w-[40%] flex flex-col">
+<h3 class="text-lg font-bold text-on-surface font-headline mb-6">Currency breakdown</h3>
+<div class="flex flex-col gap-6 flex-1 justify-center">
+<!-- EUR Bar -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-medium text-on-surface">EUR</span>
+<span class="font-bold text-on-surface-variant">85%</span>
+</div>
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<!-- USD Bar -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-medium text-on-surface">USD</span>
+<span class="font-bold text-on-surface-variant">10%</span>
+</div>
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary-container rounded-full" style="width: 10%"></div>
+</div>
+</div>
+<!-- GBP Bar -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-medium text-on-surface">GBP</span>
+<span class="font-bold text-on-surface-variant">5%</span>
+</div>
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-outline-variant rounded-full" style="width: 5%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

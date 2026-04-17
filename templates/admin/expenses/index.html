@@ -1,0 +1,311 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Expenses - Expense Tracker{% endblock %}
+
+{% block head %}
+<style>
+    .filter-pill {
+        transition: all 0.15s ease;
+    }
+    .filter-pill.active {
+        background-color: #00685f;
+        color: white;
+    }
+    .sort-header {
+        cursor: pointer;
+        user-select: none;
+    }
+    .sort-header:hover {
+        color: #00685f;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="expenseFilters()" x-init="init()">
+    {# Page header #}
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-extrabold font-headline text-on-surface tracking-tight">Expenses</h1>
+            <p class="text-sm text-on-surface-variant mt-1">{{ total_count }} expenses this month</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a :href="exportUrl()"
+               class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-on-surface-variant bg-surface-container-low hover:bg-surface-container rounded-xl transition-colors">
+                <span class="material-symbols-outlined text-[18px]">download</span>
+                Export CSV
+            </a>
+            <button class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-on-primary bg-primary hover:bg-primary-container rounded-xl transition-colors shadow-ambient">
+                <span class="material-symbols-outlined text-[18px]">add</span>
+                Add expense
+            </button>
+        </div>
+    </div>
+
+    {# Filter bar #}
+    <div class="sticky top-16 z-30 bg-surface/95 backdrop-blur-sm pb-4 pt-2 -mx-1 px-1">
+        <div class="flex items-center gap-3 flex-wrap">
+            {# Date range #}
+            <div class="relative">
+                <div class="flex items-center gap-2 bg-surface-container-low hover:bg-surface-container rounded-xl px-4 py-2.5 text-sm cursor-pointer transition-colors"
+                     id="date-range-display"
+                     @click="$refs.dateInput.focus()">
+                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant">calendar_today</span>
+                    <input type="text" id="date-range-picker" x-ref="dateInput"
+                           class="bg-transparent border-none outline-none text-sm text-on-surface w-44 cursor-pointer p-0 focus:ring-0"
+                           placeholder="Select date range" readonly>
+                </div>
+            </div>
+
+            {# Category dropdown #}
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open"
+                        class="flex items-center gap-2 bg-surface-container-low hover:bg-surface-container rounded-xl px-4 py-2.5 text-sm transition-colors"
+                        :class="category !== '' ? 'bg-primary text-on-primary' : ''">
+                    <span x-text="category && category !== 'all' ? category : 'All categories'"></span>
+                    <span class="material-symbols-outlined text-[16px]">expand_more</span>
+                </button>
+                <div x-show="open" @click.outside="open = false" x-transition
+                     class="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-ambient py-1 z-50 min-w-[180px]">
+                    <button @click="category = ''; open = false; applyFilters()"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-surface-container-low transition-colors"
+                            :class="category === '' ? 'text-primary font-semibold' : 'text-on-surface'">
+                        All categories
+                    </button>
+                    {% for cat in categories %}
+                    <button @click="category = '{{ cat.value }}'; open = false; applyFilters()"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-surface-container-low transition-colors"
+                            :class="category === '{{ cat.value }}' ? 'text-primary font-semibold' : 'text-on-surface'">
+                        {{ cat.value }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Expense type toggle #}
+            <div class="flex items-center bg-surface-container-low rounded-xl p-0.5">
+                <template x-for="t in [{val:'all',label:'All'},{val:'personal',label:'Personal'},{val:'company',label:'Company'}]">
+                    <button @click="expenseType = t.val; applyFilters()"
+                            class="px-4 py-2 text-sm font-medium rounded-[10px] transition-all"
+                            :class="expenseType === t.val
+                                ? 'bg-primary text-on-primary shadow-sm'
+                                : 'text-on-surface-variant hover:text-on-surface'">
+                        <span x-text="t.label"></span>
+                    </button>
+                </template>
+            </div>
+
+            {# Vendor search #}
+            <div class="relative">
+                <span class="material-symbols-outlined text-[18px] text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2">search</span>
+                <input type="text" x-model.debounce.400ms="vendorSearch"
+                       @input.debounce.400ms="applyFilters()"
+                       placeholder="Vendor..."
+                       class="bg-surface-container-low hover:bg-surface-container rounded-xl pl-9 pr-4 py-2.5 text-sm border-none outline-none focus:ring-2 focus:ring-primary/20 w-40 transition-colors">
+            </div>
+
+            {# Clear filters #}
+            <button x-show="hasFilters()" x-transition
+                    @click="clearFilters()"
+                    class="text-sm text-on-surface-variant hover:text-primary transition-colors ml-1">
+                Clear filters
+            </button>
+        </div>
+    </div>
+
+    {# Table #}
+    <div class="bg-white rounded-2xl shadow-ambient overflow-hidden mt-2">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+                    <th class="px-6 py-4 sort-header"
+                        @click="toggleSort('date')"
+                        hx-get="/admin/expenses/table"
+                        hx-target="#expense-table-body"
+                        hx-swap="innerHTML"
+                        :hx-vals="sortVals('date')">
+                        <div class="flex items-center gap-1">
+                            Date
+                            <template x-if="sort === 'date'">
+                                <span class="material-symbols-outlined text-[14px]"
+                                      x-text="dir === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                            </template>
+                        </div>
+                    </th>
+                    <th class="px-6 py-4 sort-header"
+                        @click="toggleSort('vendor')"
+                        hx-get="/admin/expenses/table"
+                        hx-target="#expense-table-body"
+                        hx-swap="innerHTML"
+                        :hx-vals="sortVals('vendor')">
+                        <div class="flex items-center gap-1">
+                            Vendor
+                            <template x-if="sort === 'vendor'">
+                                <span class="material-symbols-outlined text-[14px]"
+                                      x-text="dir === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                            </template>
+                        </div>
+                    </th>
+                    <th class="px-6 py-4 sort-header"
+                        @click="toggleSort('category')"
+                        hx-get="/admin/expenses/table"
+                        hx-target="#expense-table-body"
+                        hx-swap="innerHTML"
+                        :hx-vals="sortVals('category')">
+                        <div class="flex items-center gap-1">
+                            Category
+                            <template x-if="sort === 'category'">
+                                <span class="material-symbols-outlined text-[14px]"
+                                      x-text="dir === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                            </template>
+                        </div>
+                    </th>
+                    <th class="px-6 py-4 sort-header text-right"
+                        @click="toggleSort('amount')"
+                        hx-get="/admin/expenses/table"
+                        hx-target="#expense-table-body"
+                        hx-swap="innerHTML"
+                        :hx-vals="sortVals('amount')">
+                        <div class="flex items-center justify-end gap-1">
+                            Amount
+                            <template x-if="sort === 'amount'">
+                                <span class="material-symbols-outlined text-[14px]"
+                                      x-text="dir === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                            </template>
+                        </div>
+                    </th>
+                    <th class="px-6 py-4">Location</th>
+                    <th class="px-6 py-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="expense-table-body"
+                   hx-get="/admin/expenses/table"
+                   hx-trigger="load"
+                   hx-swap="innerHTML">
+                <tr>
+                    <td colspan="6" class="px-6 py-16 text-center text-on-surface-variant text-sm">
+                        <div class="flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-3xl text-outline-variant animate-spin">progress_activity</span>
+                            Loading expenses...
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Detail slide-over #}
+<div x-data="{ detailOpen: false, detailContent: '' }"
+     @open-detail.window="detailOpen = true; detailContent = $event.detail"
+     @keydown.escape.window="detailOpen = false">
+    <template x-if="detailOpen">
+        <div class="fixed inset-0 z-50 flex justify-end">
+            <div class="absolute inset-0 bg-black/20 backdrop-blur-sm" @click="detailOpen = false" x-transition.opacity></div>
+            <div class="relative w-[480px] h-full bg-white shadow-2xl overflow-y-auto"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="translate-x-full"
+                 x-transition:enter-end="translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="translate-x-0"
+                 x-transition:leave-end="translate-x-full"
+                 x-html="detailContent">
+            </div>
+        </div>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function expenseFilters() {
+    return {
+        dateFrom: '',
+        dateTo: '',
+        category: '',
+        expenseType: 'all',
+        vendorSearch: '',
+        sort: 'date',
+        dir: 'desc',
+        page: 1,
+        perPage: 25,
+        fp: null,
+
+        init() {
+            this.fp = flatpickr('#date-range-picker', {
+                mode: 'range',
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'M j, Y',
+                onChange: (dates) => {
+                    if (dates.length === 2) {
+                        this.dateFrom = dates[0].toISOString().split('T')[0];
+                        this.dateTo = dates[1].toISOString().split('T')[0];
+                        this.applyFilters();
+                    }
+                },
+            });
+        },
+
+        hasFilters() {
+            return this.dateFrom || this.dateTo || this.category || this.expenseType !== 'all' || this.vendorSearch;
+        },
+
+        clearFilters() {
+            this.dateFrom = '';
+            this.dateTo = '';
+            this.category = '';
+            this.expenseType = 'all';
+            this.vendorSearch = '';
+            this.page = 1;
+            if (this.fp) this.fp.clear();
+            this.applyFilters();
+        },
+
+        toggleSort(col) {
+            if (this.sort === col) {
+                this.dir = this.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sort = col;
+                this.dir = col === 'vendor' || col === 'category' ? 'asc' : 'desc';
+            }
+            this.applyFilters();
+        },
+
+        sortVals(col) {
+            let d = this.sort === col && this.dir === 'desc' ? 'asc' : 'desc';
+            if (this.sort !== col) d = col === 'vendor' || col === 'category' ? 'asc' : 'desc';
+            return JSON.stringify(Object.assign({sort: col, dir: d}, this.filterParams()));
+        },
+
+        filterParams() {
+            let p = { page: this.page, per_page: this.perPage };
+            if (this.dateFrom) p.date_from = this.dateFrom;
+            if (this.dateTo) p.date_to = this.dateTo;
+            if (this.category) p.category = this.category;
+            if (this.expenseType && this.expenseType !== 'all') p.expense_type = this.expenseType;
+            if (this.vendorSearch) p.vendor = this.vendorSearch;
+            p.sort = this.sort;
+            p.dir = this.dir;
+            return p;
+        },
+
+        applyFilters() {
+            this.page = 1;
+            const params = new URLSearchParams(this.filterParams());
+            htmx.ajax('GET', '/admin/expenses/table?' + params.toString(), {target: '#expense-table-body', swap: 'innerHTML'});
+        },
+
+        exportUrl() {
+            const params = new URLSearchParams();
+            if (this.dateFrom) params.set('date_from', this.dateFrom);
+            if (this.dateTo) params.set('date_to', this.dateTo);
+            if (this.category) params.set('category', this.category);
+            if (this.expenseType && this.expenseType !== 'all') params.set('expense_type', this.expenseType);
+            if (this.vendorSearch) params.set('vendor', this.vendorSearch);
+            return '/admin/expenses/export?' + params.toString();
+        },
+    };
+}
+</script>
+{% endblock %}

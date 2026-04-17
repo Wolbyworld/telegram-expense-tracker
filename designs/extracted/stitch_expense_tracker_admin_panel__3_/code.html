@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Expense Tracker - Expenses</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#dee4e1",
+                        "primary-fixed": "#89f5e7",
+                        "on-surface": "#171d1c",
+                        "tertiary-container": "#b05e3d",
+                        "secondary-fixed": "#c2ebe3",
+                        "on-background": "#171d1c",
+                        "outline-variant": "#bcc9c6",
+                        "on-error": "#ffffff",
+                        "surface-container": "#eaefed",
+                        "primary-fixed-dim": "#6bd8cb",
+                        "on-primary-fixed-variant": "#005049",
+                        "on-surface-variant": "#3d4947",
+                        "tertiary": "#924628",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#00685f",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "secondary-container": "#c2ebe3",
+                        "outline": "#6d7a77",
+                        "tertiary-fixed": "#ffdbce",
+                        "on-error-container": "#93000a",
+                        "inverse-primary": "#6bd8cb",
+                        "inverse-on-surface": "#edf2f0",
+                        "on-tertiary-fixed-variant": "#773215",
+                        "on-secondary-fixed": "#00201d",
+                        "secondary": "#3f6560",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#a6cfc8",
+                        "error-container": "#ffdad6",
+                        "on-secondary-container": "#456b66",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f0f5f2",
+                        "surface": "#f5faf8",
+                        "on-tertiary-fixed": "#370e00",
+                        "on-primary-fixed": "#00201d",
+                        "primary-container": "#008378",
+                        "on-tertiary-container": "#fffbff",
+                        "on-primary-container": "#f4fffc",
+                        "on-secondary-fixed-variant": "#274d48",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#006a61",
+                        "surface-dim": "#d6dbd9",
+                        "surface-container-highest": "#dee4e1",
+                        "surface-container-high": "#e4e9e7",
+                        "inverse-surface": "#2c3130",
+                        "surface-bright": "#f5faf8",
+                        "background": "#f5faf8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4, h5, h6, .font-headline { font-family: 'Manrope', sans-serif; }
+        
+        /* Custom Scrollbar for better editorial feel */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #bcc9c6; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6d7a77; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen flex">
+<!-- SideNavBar Component -->
+<nav class="hidden md:flex flex-col gap-2 p-6 h-screen w-64 fixed left-0 top-0 bg-[#f0f5f2] dark:bg-slate-900 border-none">
+<div class="mb-8 px-3 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">receipt</span>
+<div>
+<h1 class="font-manrope tracking-tight text-teal-900 dark:text-white font-bold text-lg leading-tight">Expense Tracker</h1>
+<p class="text-on-surface-variant text-xs">The Fluid Ledger</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#3d4947] dark:text-slate-400 hover:text-teal-700 hover:bg-[#eaefed] dark:hover:bg-slate-800 transition-colors duration-200 scale-95 hover:scale-100 font-medium" href="#">
+<span class="material-symbols-outlined text-xl">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-teal-900 dark:text-teal-100 font-bold bg-[#ffffff] dark:bg-slate-800 scale-100 shadow-[0px_4px_12px_rgba(23,29,28,0.04)]" href="#">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+<span>Expenses</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#3d4947] dark:text-slate-400 hover:text-teal-700 hover:bg-[#eaefed] dark:hover:bg-slate-800 transition-colors duration-200 scale-95 hover:scale-100 font-medium" href="#">
+<span class="material-symbols-outlined text-xl">bar_chart</span>
+<span>Reports</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#3d4947] dark:text-slate-400 hover:text-teal-700 hover:bg-[#eaefed] dark:hover:bg-slate-800 transition-colors duration-200 scale-95 hover:scale-100 font-medium" href="#">
+<span class="material-symbols-outlined text-xl">calendar_today</span>
+<span>Schedules</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#3d4947] dark:text-slate-400 hover:text-teal-700 hover:bg-[#eaefed] dark:hover:bg-slate-800 transition-colors duration-200 scale-95 hover:scale-100 font-medium" href="#">
+<span class="material-symbols-outlined text-xl">settings</span>
+<span>Settings</span>
+</a>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/15 flex items-center gap-3 px-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-sm shrink-0">
+                A
+            </div>
+<div class="overflow-hidden">
+<p class="text-sm font-medium text-on-surface truncate">Alvaro</p>
+<p class="text-xs text-on-surface-variant truncate">Admin</p>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 ml-0 md:ml-64 flex flex-col min-h-screen">
+<!-- TopAppBar Component -->
+<header class="flex justify-between items-center w-full px-8 py-6 sticky top-0 z-40 bg-surface/90 backdrop-blur-xl">
+<div>
+<h2 class="font-manrope text-2xl font-extrabold text-teal-900 dark:text-white">Expenses</h2>
+<p class="text-sm text-on-surface-variant mt-1">47 expenses this month</p>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-primary font-medium hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+                    Export CSV
+                </button>
+<button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-primary to-primary-container text-on-primary font-medium hover:opacity-90 active:scale-[0.98] transition-all shadow-[0px_8px_16px_rgba(0,104,95,0.15)]">
+<span class="material-symbols-outlined text-sm">add</span>
+                    Add expense
+                </button>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="px-8 pb-12 max-w-7xl w-full mx-auto flex-1 flex flex-col">
+<!-- Filter Bar (Glassmorphism card) -->
+<div class="bg-surface-container-lowest/80 backdrop-blur-md rounded-xl p-4 mb-6 shadow-[0px_12px_32px_rgba(23,29,28,0.03)] flex flex-wrap items-center gap-4">
+<div class="flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">calendar_month</span>
+<span class="text-sm text-on-surface font-medium">Apr 1 – Apr 17, 2026</span>
+</div>
+<div class="h-6 w-px bg-outline-variant/30 hidden sm:block"></div>
+<select class="bg-surface-container border-none text-sm text-on-surface font-medium rounded-lg px-3 py-1.5 focus:ring-0 focus:border-primary border-b-2 border-transparent transition-colors hover:bg-surface-container-high cursor-pointer">
+<option>All categories</option>
+<option>Groceries</option>
+<option>Transport</option>
+<option>Software</option>
+</select>
+<div class="flex bg-surface-container rounded-lg p-0.5">
+<button class="px-3 py-1 text-sm font-medium rounded-md bg-surface-container-lowest shadow-sm text-on-surface">All</button>
+<button class="px-3 py-1 text-sm font-medium rounded-md text-on-surface-variant hover:text-on-surface">Personal</button>
+<button class="px-3 py-1 text-sm font-medium rounded-md text-on-surface-variant hover:text-on-surface">Company</button>
+</div>
+<div class="flex-1 min-w-[150px] relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container border-none text-sm rounded-lg pl-9 pr-3 py-1.5 focus:ring-0 focus:border-b-2 focus:border-primary transition-all placeholder:text-on-surface-variant/70" placeholder="Vendor..." type="text"/>
+</div>
+<button class="text-sm text-primary font-medium hover:text-primary-container transition-colors ml-auto hidden md:block">
+                    Clear filters
+                </button>
+</div>
+<!-- Data Table (Editorial Layout) -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-[0px_12px_32px_rgba(23,29,28,0.04)] overflow-hidden flex-1 flex flex-col">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant/15 text-xs text-on-surface-variant font-medium uppercase tracking-wider bg-surface-container-low/50">
+<th class="py-4 px-6 font-semibold">Date</th>
+<th class="py-4 px-6 font-semibold">Vendor</th>
+<th class="py-4 px-6 font-semibold">Category</th>
+<th class="py-4 px-6 font-semibold text-right">Amount</th>
+<th class="py-4 px-6 font-semibold">Location</th>
+<th class="py-4 px-6 font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-sm text-on-surface">
+<!-- Row 1 -->
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-4 px-6 whitespace-nowrap text-on-surface-variant">Apr 15</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-sm">shopping_cart</span>
+</div>
+<span class="font-medium">Mercadona</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Groceries</span>
+</td>
+<td class="py-4 px-6 text-right whitespace-nowrap">
+<span class="font-headline font-bold text-base text-on-surface">€ 142.50</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">Madrid, ES</td>
+<td class="py-4 px-6 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-4 px-6 whitespace-nowrap text-on-surface-variant">Apr 14</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface text-sm">local_taxi</span>
+</div>
+<span class="font-medium">Uber</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Transport</span>
+</td>
+<td class="py-4 px-6 text-right whitespace-nowrap">
+<span class="font-headline font-bold text-base text-on-surface">€ 24.00</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">Barcelona, ES</td>
+<td class="py-4 px-6 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/50 transition-colors group bg-surface-container-low/20">
+<td class="py-4 px-6 whitespace-nowrap text-on-surface-variant">Apr 12</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary text-sm">cloud</span>
+</div>
+<span class="font-medium">AWS</span>
+<span class="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-surface-variant text-on-surface-variant rounded">Company</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Software</span>
+</td>
+<td class="py-4 px-6 text-right whitespace-nowrap">
+<div class="flex flex-col items-end">
+<span class="font-headline font-bold text-base text-on-surface">€ 1,240.00</span>
+<span class="text-xs text-on-surface-variant">$ 1,350.00</span>
+</div>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">Seattle, US</td>
+<td class="py-4 px-6 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-4 px-6 whitespace-nowrap text-on-surface-variant">Apr 10</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-sm">shopping_cart</span>
+</div>
+<span class="font-medium">Carrefour</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Groceries</span>
+</td>
+<td class="py-4 px-6 text-right whitespace-nowrap">
+<span class="font-headline font-bold text-base text-on-surface">€ 85.30</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">Madrid, ES</td>
+<td class="py-4 px-6 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-4 px-6 whitespace-nowrap text-on-surface-variant">Apr 08</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary-container text-sm">coffee</span>
+</div>
+<span class="font-medium">Starbucks</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Food &amp; Dining</span>
+</td>
+<td class="py-4 px-6 text-right whitespace-nowrap">
+<span class="font-headline font-bold text-base text-on-surface">€ 6.50</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">Madrid, ES</td>
+<td class="py-4 px-6 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="mt-auto border-t border-outline-variant/15 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface-container-low/30">
+<p class="text-sm text-on-surface-variant">Showing <span class="font-medium text-on-surface">1–25</span> of 47</p>
+<div class="flex items-center gap-4">
+<select class="bg-transparent border-none text-sm text-on-surface-variant font-medium py-1 pl-2 pr-6 focus:ring-0 cursor-pointer">
+<option>25 per page</option>
+<option>50 per page</option>
+</select>
+<div class="flex items-center gap-1">
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-50">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="w-7 h-7 rounded bg-primary text-on-primary text-sm font-medium flex items-center justify-center">1</button>
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container text-sm font-medium flex items-center justify-center transition-colors">2</button>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
