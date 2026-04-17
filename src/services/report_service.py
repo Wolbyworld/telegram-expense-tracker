@@ -125,7 +125,11 @@ def _build_receipt_data(expenses) -> list[dict]:
         if not e.receipt_path:
             continue
         path = Path(e.receipt_path)
-        if not path.exists():
+        # Prefer enhanced version
+        enhanced = path.parent / "enhanced" / path.name
+        if enhanced.exists():
+            path = enhanced
+        elif not path.exists():
             continue
         try:
             image_bytes = path.read_bytes()

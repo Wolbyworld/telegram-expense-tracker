@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+from PIL import Image as PILImage
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -23,13 +24,39 @@ from src.schemas.expense import ExpenseCategory, ExpenseCreate, ReportFilter
 from src.services import expense_service, receipt_parser, report_agent
 from src.services.currency_service import convert_to_base
 from src.services.dedup_service import compute_image_hash, find_duplicate
+from src.services.image_enhance import enhance_receipt
 from src.services.report_service import generate_csv, generate_pdf
-
-
-
 from src.utils.filters import parse_filters
 
 logger = logging.getLogger(__name__)
+
+
+def _enhance_image(raw_bytes: bytes) -> bytes:
+    """Enhance receipt image, return enhanced JPEG bytes."""
+    img = PILImage.open(io.BytesIO(raw_bytes))
+    enhanced = enhance_receipt(img)
+    buf = io.BytesIO()
+    enhanced.save(buf, "JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _save_receipt_images(
+    receipt_dir: str, filename: str, raw_bytes: bytes, enhanced_bytes: bytes,
+) -> tuple[str, str]:
+    """Save raw and enhanced receipt images. Returns (raw_path, enhanced_path)."""
+    os.makedirs(receipt_dir, exist_ok=True)
+    enhanced_dir = os.path.join(receipt_dir, "enhanced")
+    os.makedirs(enhanced_dir, exist_ok=True)
+
+    raw_path = os.path.join(receipt_dir, filename)
+    enhanced_path = os.path.join(enhanced_dir, filename)
+
+    with open(raw_path, "wb") as f:
+        f.write(raw_bytes)
+    with open(enhanced_path, "wb") as f:
+        f.write(enhanced_bytes)
+
+    return raw_path, enhanced_path
 
 
 def authorized(func):
@@ -333,13 +360,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    image_bytes = await file.download_as_bytearray()
+    image_bytes = bytes(await file.download_as_bytearray())
 
-    # Compute perceptual hash for dedup
-    img_hash = compute_image_hash(bytes(image_bytes))
-
+    # Enhance image for better GPT accuracy (~100ms)
     try:
-        parsed, raw_response = await receipt_parser.parse_receipt(bytes(image_bytes))
+        enhanced_bytes = _enhance_image(image_bytes)
+    except Exception:
+        logger.warning("Image enhancement failed, using raw image")
+        enhanced_bytes = image_bytes
+
+    # Compute perceptual hash on RAW image for dedup consistency
+    img_hash = compute_image_hash(image_bytes)
+
+    # Send ENHANCED image to GPT for parsing
+    try:
+        parsed, raw_response = await receipt_parser.parse_receipt(enhanced_bytes)
     except Exception:
         logger.exception("Failed to parse receipt")
         await update.message.reply_text(
@@ -368,7 +403,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         context.user_data.setdefault("pending_expenses", {})[dup_key] = {
             "parsed": parsed,
             "raw_response": raw_response,
-            "image_bytes": bytes(image_bytes),
+            "image_bytes": image_bytes,
+            "enhanced_bytes": enhanced_bytes,
             "image_hash": img_hash,
             "caption": update.message.caption,
         }
@@ -380,14 +416,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # Save receipt image to disk
-    receipt_dir = settings.receipt_storage_path
-    os.makedirs(receipt_dir, exist_ok=True)
+    # Save raw + enhanced receipt images to disk
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     receipt_filename = f"{update.effective_user.id}_{timestamp}.jpg"
-    receipt_path = os.path.join(receipt_dir, receipt_filename)
-    with open(receipt_path, "wb") as f:
-        f.write(image_bytes)
+    receipt_path, _ = _save_receipt_images(
+        settings.receipt_storage_path, receipt_filename, image_bytes, enhanced_bytes,
+    )
 
     data = ExpenseCreate(
         vendor=parsed.vendor,
@@ -551,17 +585,16 @@ async def _save_pending_expense(query, context, pending: dict) -> None:
     parsed = pending["parsed"]
     raw_response = pending["raw_response"]
     image_bytes = pending["image_bytes"]
+    enhanced_bytes = pending.get("enhanced_bytes", image_bytes)
     img_hash = pending["image_hash"]
     caption = pending["caption"]
 
-    receipt_dir = settings.receipt_storage_path
-    os.makedirs(receipt_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     user_id = query.from_user.id
     receipt_filename = f"{user_id}_{timestamp}.jpg"
-    receipt_path = os.path.join(receipt_dir, receipt_filename)
-    with open(receipt_path, "wb") as f:
-        f.write(image_bytes)
+    receipt_path, _ = _save_receipt_images(
+        settings.receipt_storage_path, receipt_filename, image_bytes, enhanced_bytes,
+    )
 
     data = ExpenseCreate(
         vendor=parsed.vendor,

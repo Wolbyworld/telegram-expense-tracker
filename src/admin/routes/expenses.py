@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
@@ -320,6 +321,7 @@ async def expense_delete(
 @router.get("/{expense_id}/receipt")
 async def expense_receipt(
     expense_id: int,
+    raw: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     user_id = _get_user_id()
@@ -329,4 +331,10 @@ async def expense_receipt(
             iter([b""]),
             status_code=404,
         )
+    # Prefer enhanced version unless ?raw=true
+    if not raw:
+        raw_path = Path(expense.receipt_path)
+        enhanced_path = raw_path.parent / "enhanced" / raw_path.name
+        if enhanced_path.exists():
+            return FileResponse(str(enhanced_path))
     return FileResponse(expense.receipt_path)
