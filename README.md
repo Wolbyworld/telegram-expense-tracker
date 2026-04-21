@@ -9,6 +9,12 @@ Snap a receipt → GPT-5.4-mini vision extracts vendor / amount / currency /
 date / line items → everything lands in Postgres → you can query it from
 Telegram (`/report "restaurants last month"`) or from the `/admin` web UI.
 
+<p align="center">
+  <img src="docs/telegram-bot.png" alt="Telegram bot receipt parsing" width="320">
+  &nbsp;&nbsp;
+  <img src="docs/admin-dashboard.png" alt="Admin panel dashboard" width="520">
+</p>
+
 ## Features
 
 - **Receipt OCR via GPT-5.4-mini vision** (OpenAI Responses API, structured JSON output).
