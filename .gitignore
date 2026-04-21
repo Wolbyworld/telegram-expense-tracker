@@ -22,6 +22,8 @@ env/
 
 # Environment
 .env
+.env.local
+.env.*.local
 
 # Receipts storage
 receipts/

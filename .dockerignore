@@ -1,0 +1,38 @@
+.git
+.gitignore
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.DS_Store
+
+# Secrets — must never go into the image
+.env
+.env.local
+.env.*.local
+
+# Local data
+receipts/
+*.db
+*.sqlite
+*.sqlite3
+
+# Docs / design assets not needed at runtime
+README.md
+CLAUDE.md
+LICENSE
+designs/
+.stitch-mockups/
+.firecrawl/
+tests/
+scripts/__pycache__/
+
+# Build output
+dist/
+build/
+*.egg-info/

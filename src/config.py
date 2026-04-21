@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str
-    telegram_webhook_url: str = "https://expenses.elcano.cc/webhook"
+    telegram_webhook_url: str = "https://your-domain.example.com/webhook"
     telegram_webhook_secret: str = ""
 
     # OpenAI
