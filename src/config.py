@@ -15,12 +15,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://expenses:expenses@localhost:5432/expenses"
 
-    # Email
-    smtp_host: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_pass: str = ""
-    email_from: str = "Expense Bot <expenses@yourdomain.com>"
+    # Email (Resend)
+    resend_api_key: str = ""
+    email_from: str = "Expense Tracker <reports@elcano.cc>"
 
     # Currency
     base_currency: str = "EUR"

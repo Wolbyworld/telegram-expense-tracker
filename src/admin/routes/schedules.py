@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.dependencies import get_db
 from src.config import settings
+from src.services import scheduler_runner
+from src.services.email_service import parse_recipients
 from src.services.scheduler_service import (
     create_schedule,
     delete_schedule,
@@ -27,6 +29,13 @@ def _get_user_id() -> int:
         ids = settings.allowed_user_ids
         _user_id = next(iter(ids)) if ids else 0
     return _user_id
+
+
+def _canonicalize_email(email: str, email_enabled: bool) -> str | None:
+    if not email_enabled:
+        return None
+    addrs = parse_recipients(email)
+    return ", ".join(addrs) if addrs else None
 
 
 @router.get("/schedules")
@@ -77,11 +86,12 @@ async def create_schedule_route(
         "time_utc": time_utc,
         "timezone": timezone,
         "send_telegram": send_telegram,
-        "email": email if email_enabled and email else None,
+        "email": _canonicalize_email(email, email_enabled),
         "filters": filters or None,
     }
 
-    await create_schedule(db, user_id, data)
+    sch = await create_schedule(db, user_id, data)
+    await scheduler_runner.sync_schedule(db, sch.id)
     all_schedules = await list_schedules(db, user_id)
 
     return templates.TemplateResponse(
@@ -144,7 +154,7 @@ async def update_schedule_route(
         "time_utc": time_utc,
         "timezone": timezone,
         "send_telegram": send_telegram,
-        "email": email if email_enabled and email else None,
+        "email": _canonicalize_email(email, email_enabled),
         "filters": filters or None,
     }
 
@@ -152,6 +162,7 @@ async def update_schedule_route(
     if schedule is None:
         return Response(status_code=404)
 
+    await scheduler_runner.sync_schedule(db, schedule.id)
     all_schedules = await list_schedules(db, user_id)
     return templates.TemplateResponse(
         request=request,
@@ -171,6 +182,7 @@ async def delete_schedule_route(
     deleted = await delete_schedule(db, user_id, schedule_id)
     if not deleted:
         return Response(status_code=404)
+    scheduler_runner.remove(schedule_id)
     # Return empty body so HTMX can swap-delete the card
     return Response(status_code=200, content="")
 
@@ -186,11 +198,47 @@ async def toggle_schedule_route(
     if schedule is None:
         return Response(status_code=404)
 
+    await scheduler_runner.sync_schedule(db, schedule.id)
     all_schedules = await list_schedules(db, user_id)
     return templates.TemplateResponse(
         request=request,
         name="admin/schedules/_list.html",
         context={
             "schedules": all_schedules,
+        },
+    )
+
+
+@router.post("/schedules/{schedule_id}/run")
+async def run_schedule_now(
+    request: Request,
+    schedule_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger an immediate run of the scheduled report (Send now)."""
+    user_id = _get_user_id()
+    schedule = await get_schedule(db, user_id, schedule_id)
+    if schedule is None:
+        return Response(status_code=404)
+
+    summary = await scheduler_runner.run_schedule(schedule_id)
+
+    if summary.get("error"):
+        toast = f"Run failed: {summary['error']}"
+    else:
+        bits = []
+        if summary.get("sent_emails"):
+            bits.append(f"emailed {len(summary['recipients'])}")
+        if summary.get("telegram_sent"):
+            bits.append("sent to Telegram")
+        toast = "Sent — " + (", ".join(bits) if bits else "no delivery method configured")
+
+    all_schedules = await list_schedules(db, user_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/schedules/_list.html",
+        context={
+            "schedules": all_schedules,
+            "toast": toast,
         },
     )

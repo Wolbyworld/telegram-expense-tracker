@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -14,7 +14,7 @@ from src.admin.dependencies import get_db
 from src.config import settings
 from src.models.expense import Expense
 from src.schemas.expense import ExpenseCategory, ReportFilter
-from src.services import expense_service
+from src.services import currency_service, expense_service
 
 router = APIRouter(prefix="/expenses")
 templates = Jinja2Templates(directory="templates")
@@ -288,6 +288,15 @@ async def expense_update(
     # Support both form data and JSON (hx-vals sends as form-encoded)
     form = await request.form()
 
+    existing = await expense_service.get_expense(db, user_id, expense_id)
+    if not existing:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/expenses/_row.html",
+            context={"expense": None},
+            status_code=404,
+        )
+
     fields: dict = {}
     if form.get("vendor"):
         fields["vendor"] = str(form["vendor"])
@@ -298,6 +307,47 @@ async def expense_update(
     if form.get("expense_type"):
         val = str(form["expense_type"])
         fields["expense_type"] = val if val != "none" else None
+    if "location_city" in form:
+        fields["location_city"] = str(form["location_city"]).strip() or None
+    if "location_country" in form:
+        fields["location_country"] = str(form["location_country"]).strip() or None
+
+    if form.get("date"):
+        parsed = _parse_date(str(form["date"]))
+        if parsed:
+            fields["date"] = parsed
+    if form.get("original_amount"):
+        try:
+            fields["original_amount"] = Decimal(str(form["original_amount"]))
+        except InvalidOperation:
+            pass
+    if form.get("original_currency"):
+        fields["original_currency"] = str(form["original_currency"]).upper()
+
+    # If any conversion input changed, recompute eur_amount + exchange_rate
+    new_amount = fields.get("original_amount", existing.original_amount)
+    new_currency = fields.get("original_currency", existing.original_currency)
+    new_date = fields.get("date", existing.date)
+    conversion_changed = (
+        new_amount != existing.original_amount
+        or new_currency != existing.original_currency
+        or new_date != existing.date
+    )
+    if conversion_changed:
+        if new_currency == "EUR":
+            fields["eur_amount"] = new_amount
+            fields["exchange_rate"] = Decimal("1.000000")
+        else:
+            result = await currency_service.convert_to_base(
+                db, new_amount, new_currency, new_date
+            )
+            if result is not None:
+                converted, rate = result
+                fields["eur_amount"] = converted
+                fields["exchange_rate"] = rate
+            else:
+                fields["eur_amount"] = None
+                fields["exchange_rate"] = None
 
     expense = await expense_service.update_expense(db, user_id, expense_id, **fields)
     return templates.TemplateResponse(

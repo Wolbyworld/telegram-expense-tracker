@@ -54,6 +54,9 @@ if not _polling_mode:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from src.bot.telegram_bot import set_bot
+    from src.services import scheduler_runner
+
     if telegram_app and not _polling_mode:
         await telegram_app.initialize()
         await telegram_app.start()
@@ -62,13 +65,19 @@ async def lifespan(app: FastAPI):
             url=webhook_url,
             secret_token=settings.telegram_webhook_secret or None,
         )
+        set_bot(telegram_app.bot)
         logger.info("Telegram webhook set to %s", webhook_url)
 
+    await scheduler_runner.start_scheduler()
+
     yield
+
+    await scheduler_runner.stop_scheduler()
 
     if telegram_app and not _polling_mode:
         await telegram_app.stop()
         await telegram_app.shutdown()
+        set_bot(None)
 
 
 app = FastAPI(title="Expense Tracker Bot", lifespan=lifespan)

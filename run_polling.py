@@ -34,6 +34,7 @@ from src.bot.handlers import (
     start_command,
     total_command,
 )
+from src.bot.telegram_bot import set_bot
 from src.config import settings
 
 logging.basicConfig(
@@ -71,6 +72,7 @@ async def main():
     await telegram_app.initialize()
     await telegram_app.start()
     await telegram_app.updater.start_polling()
+    set_bot(telegram_app.bot)
 
     logger.info("Bot polling + admin panel on :8000 started")
 
@@ -80,6 +82,7 @@ async def main():
         await telegram_app.updater.stop()
         await telegram_app.stop()
         await telegram_app.shutdown()
+        set_bot(None)
 
 
 if __name__ == "__main__":

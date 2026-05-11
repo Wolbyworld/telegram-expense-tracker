@@ -1,3 +1,11 @@
+{% if toast %}
+<div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4500)"
+     x-transition.opacity
+     class="mb-4 px-4 py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium flex items-center gap-2">
+    <span class="material-symbols-outlined text-[18px]">check_circle</span>
+    {{ toast }}
+</div>
+{% endif %}
 {% if schedules %}
 <div class="space-y-4">
     {% for s in schedules %}
@@ -36,6 +44,13 @@
 
             <!-- Actions -->
             <div class="flex items-center gap-1">
+                <button hx-post="/admin/schedules/{{ s.id }}/run" hx-target="#schedule-list" hx-swap="innerHTML"
+                        hx-confirm="Send this report now?"
+                        hx-disabled-elt="this"
+                        class="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors disabled:opacity-50"
+                        title="Send now">
+                    <span class="material-symbols-outlined text-[20px]">rocket_launch</span>
+                </button>
                 <button hx-post="/admin/schedules/{{ s.id }}/toggle" hx-target="#schedule-list" hx-swap="innerHTML"
                         class="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
                         title="{{ 'Pause' if s.is_active else 'Resume' }}">
@@ -88,20 +103,30 @@
             {% endif %}
 
             <!-- Delivery -->
-            <div class="flex items-center gap-2 text-on-surface-variant">
-                <span class="material-symbols-outlined text-[16px]">send</span>
-                <span class="flex items-center gap-2">
+            <div class="flex items-start gap-2 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px] mt-0.5">send</span>
+                <div class="flex flex-wrap items-center gap-1.5">
                     {% if s.send_telegram %}
-                    <span class="inline-flex items-center gap-1">Telegram</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-xs font-medium">
+                        <span class="material-symbols-outlined text-[12px]">chat</span>
+                        Telegram
+                    </span>
                     {% endif %}
                     {% if s.email %}
-                    {% if s.send_telegram %}<span class="text-outline">&middot;</span>{% endif %}
-                    <span class="inline-flex items-center gap-1">{{ s.email }}</span>
+                        {% for addr in s.email.split(',') %}
+                            {% set trimmed = addr.strip() %}
+                            {% if trimmed %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                                <span class="material-symbols-outlined text-[12px]">mail</span>
+                                {{ trimmed }}
+                            </span>
+                            {% endif %}
+                        {% endfor %}
                     {% endif %}
                     {% if not s.send_telegram and not s.email %}
-                    <span class="text-outline italic">No delivery method</span>
+                    <span class="text-outline italic text-sm">No delivery method</span>
                     {% endif %}
-                </span>
+                </div>
             </div>
 
             <!-- Last / next run -->
