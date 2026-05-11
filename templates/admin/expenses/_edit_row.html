@@ -1,49 +1,72 @@
+{% set currencies = ['EUR', 'USD', 'GBP', 'HKD', 'JPY', 'CNY', 'TWD', 'CHF', 'CAD', 'AUD', 'SGD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'MXN', 'BRL', 'ZAR', 'INR', 'KRW', 'THB', 'TRY', 'NZD'] %}
+
 <tr id="expense-row-{{ expense.id }}" class="border-t border-surface-container-low bg-primary/[0.02]">
-    <td class="px-6 py-3">
-        <span class="text-sm font-medium text-on-surface">
-            {{ expense.date.strftime('%b %d') }}
-        </span>
+    {# Date #}
+    <td class="px-4 py-3">
+        <input type="date" name="date" value="{{ expense.date.isoformat() }}" form="edit-form-{{ expense.id }}"
+               class="w-full bg-white rounded-lg px-2 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors">
     </td>
 
-    <td class="px-6 py-3">
+    {# Vendor #}
+    <td class="px-4 py-3">
         <input type="text" name="vendor" value="{{ expense.vendor or '' }}" form="edit-form-{{ expense.id }}"
-               class="w-full bg-white rounded-lg px-3 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
-               placeholder="Vendor name">
+               class="w-full bg-white rounded-lg px-2 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
+               placeholder="Vendor">
     </td>
 
-    <td class="px-6 py-3">
+    {# Category + Type #}
+    <td class="px-4 py-3">
         <select name="category" form="edit-form-{{ expense.id }}"
-                class="w-full bg-white rounded-lg px-3 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors appearance-none">
+                class="w-full bg-white rounded-lg px-2 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors appearance-none">
             {% for cat in categories %}
             <option value="{{ cat.value }}" {{ 'selected' if expense.category == cat.value else '' }}>{{ cat.value }}</option>
             {% endfor %}
         </select>
-    </td>
-
-    <td class="px-6 py-3 text-right">
-        <span class="text-sm font-semibold text-on-surface">
-            {% if expense.eur_amount is not none %}
-                &euro; {{ '{:,.2f}'.format(expense.eur_amount | float) }}
-            {% else %}
-                {{ expense.original_currency }} {{ '{:,.2f}'.format(expense.original_amount | float) }}
-            {% endif %}
-        </span>
-    </td>
-
-    <td class="px-6 py-3">
-        <div class="flex items-center gap-2">
-            {% for t in [('personal', 'Personal'), ('company', 'Company'), ('none', 'None')] %}
-            <label class="flex items-center gap-1 text-xs text-on-surface-variant cursor-pointer">
+        <div class="flex items-center gap-2 mt-1.5">
+            {% for t in [('personal', 'P'), ('company', 'C'), ('none', '—')] %}
+            <label class="flex items-center gap-1 text-[10px] text-on-surface-variant cursor-pointer">
                 <input type="radio" name="expense_type" value="{{ t[0] }}" form="edit-form-{{ expense.id }}"
                        {{ 'checked' if (expense.expense_type == t[0]) or (t[0] == 'none' and not expense.expense_type) else '' }}
-                       class="w-3.5 h-3.5 text-primary focus:ring-primary/20 border-outline-variant">
+                       class="w-3 h-3 text-primary focus:ring-primary/20 border-outline-variant">
                 {{ t[1] }}
             </label>
             {% endfor %}
         </div>
     </td>
 
-    <td class="px-6 py-3 text-right">
+    {# Amount + Currency #}
+    <td class="px-4 py-3">
+        <div class="flex items-center gap-1">
+            <input type="number" step="0.01" min="0" name="original_amount"
+                   value="{{ '{:.2f}'.format(expense.original_amount | float) }}" form="edit-form-{{ expense.id }}"
+                   class="w-20 bg-white rounded-lg px-2 py-1.5 text-sm text-right border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors">
+            <select name="original_currency" form="edit-form-{{ expense.id }}"
+                    class="bg-white rounded-lg px-1.5 py-1.5 text-sm border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors appearance-none">
+                {% for c in currencies %}
+                <option value="{{ c }}" {{ 'selected' if expense.original_currency == c else '' }}>{{ c }}</option>
+                {% endfor %}
+                {# Preserve an unknown currency already on the record #}
+                {% if expense.original_currency and expense.original_currency not in currencies %}
+                <option value="{{ expense.original_currency }}" selected>{{ expense.original_currency }}</option>
+                {% endif %}
+            </select>
+        </div>
+    </td>
+
+    {# Location #}
+    <td class="px-4 py-3">
+        <div class="flex flex-col gap-1">
+            <input type="text" name="location_city" value="{{ expense.location_city or '' }}" form="edit-form-{{ expense.id }}"
+                   class="w-full bg-white rounded-lg px-2 py-1 text-xs border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
+                   placeholder="City">
+            <input type="text" name="location_country" value="{{ expense.location_country or '' }}" form="edit-form-{{ expense.id }}"
+                   class="w-full bg-white rounded-lg px-2 py-1 text-xs border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
+                   placeholder="Country">
+        </div>
+    </td>
+
+    {# Actions #}
+    <td class="px-4 py-3 text-right">
         <form id="edit-form-{{ expense.id }}" class="flex items-center justify-end gap-1">
             <input type="hidden" name="description" value="{{ expense.description or '' }}">
             <button type="submit"
