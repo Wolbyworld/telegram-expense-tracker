@@ -138,8 +138,10 @@
             </label>
 
             <div x-show="emailEnabled" x-transition class="pl-7">
-                <input type="email" name="email" value="{{ schedule.email or '' }}" placeholder="you@example.com"
+                <input type="text" name="email" value="{{ schedule.email or '' }}"
+                       placeholder="you@a.com, accountant@b.com"
                        class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline">
+                <p class="text-[11px] text-outline mt-1">Separate multiple recipients with commas.</p>
             </div>
         </div>
 
