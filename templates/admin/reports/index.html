@@ -9,6 +9,27 @@
 
 <div x-data="reportPage()" class="flex flex-col gap-8 pb-24">
 
+    <!-- Preset shortcuts -->
+    <div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-primary">bolt</span>
+            <h2 class="text-lg font-bold text-on-surface font-headline">Quick presets</h2>
+        </div>
+        <p class="text-sm text-on-surface-variant mb-4">One-click filter combinations. Click to preview, then "Schedule this" to repeat on a cadence.</p>
+        <div class="flex flex-wrap gap-2">
+            {% for p in presets %}
+            <button type="button"
+                    hx-post="/admin/reports/apply-preset"
+                    hx-vals='{"preset_key": "{{ p.key }}"}'
+                    hx-target="#filter-form"
+                    hx-swap="outerHTML"
+                    class="px-3 py-1.5 bg-surface-container-high rounded-full text-xs font-medium text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer">
+                {{ p.label }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
     <!-- NL Input Section -->
     <div class="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
         <div class="flex items-center gap-2 mb-4">
@@ -81,6 +102,12 @@
         </div>
         <div class="flex items-center gap-3">
             <button type="button"
+                    @click="openScheduleModal()"
+                    class="border border-primary text-primary hover:bg-primary/5 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">event_repeat</span>
+                Schedule this
+            </button>
+            <button type="button"
                     @click="submitGenerate('csv')"
                     class="border border-outline-variant text-on-surface hover:bg-surface-container px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
                 <span class="material-symbols-outlined text-base">table_chart</span>
@@ -94,6 +121,149 @@
             </button>
         </div>
     </div>
+
+    <!-- Schedule-this modal -->
+    <div x-show="scheduleOpen" x-cloak x-transition.opacity
+         @keydown.escape.window="scheduleOpen = false"
+         class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
+        <div @click.outside="scheduleOpen = false"
+             class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+             x-transition.scale.origin.center>
+            <div class="p-6 border-b border-outline-variant/30 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-on-surface font-headline">Schedule this report</h3>
+                    <p class="text-sm text-on-surface-variant mt-0.5">Send the current filter set on a cadence.</p>
+                </div>
+                <button @click="scheduleOpen = false" class="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+
+            <form id="schedule-this-form"
+                  hx-post="/admin/reports/schedule"
+                  hx-include="#filter-form"
+                  hx-swap="none"
+                  class="p-6 space-y-5"
+                  x-data="{ frequency: 'weekly', emailEnabled: false, sendTelegram: false }">
+
+                <!-- Window -->
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Reporting window</label>
+                    <select name="window" required
+                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                        <option value="">Pick a window…</option>
+                        {% for w in windows %}
+                        <option value="{{ w.key }}">{{ w.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-outline mt-1">The window is recomputed each time the schedule fires. The dates in the filter form are ignored.</p>
+                </div>
+
+                <!-- Frequency -->
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Frequency</label>
+                    <div class="flex bg-surface-container rounded-xl p-1 gap-1">
+                        <template x-for="f in ['daily', 'weekly', 'monthly']" :key="f">
+                            <button type="button" @click="frequency = f"
+                                    :class="frequency === f
+                                        ? 'bg-primary text-on-primary shadow-sm'
+                                        : 'text-on-surface-variant hover:text-on-surface'"
+                                    class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold capitalize transition-all duration-150"
+                                    x-text="f">
+                            </button>
+                        </template>
+                    </div>
+                    <input type="hidden" name="frequency" :value="frequency">
+                </div>
+
+                <div x-show="frequency === 'weekly'" x-transition>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Day of week</label>
+                    <select name="day_of_week"
+                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                        <option value="0">Monday</option><option value="1">Tuesday</option>
+                        <option value="2">Wednesday</option><option value="3">Thursday</option>
+                        <option value="4">Friday</option><option value="5">Saturday</option>
+                        <option value="6">Sunday</option>
+                    </select>
+                </div>
+
+                <div x-show="frequency === 'monthly'" x-transition>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Day of month</label>
+                    <select name="day_of_month"
+                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                        {% for d in range(1, 29) %}
+                        <option value="{{ d }}">Day {{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Time</label>
+                        <input type="time" name="time_utc" value="09:00"
+                               class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-on-surface mb-2">Timezone</label>
+                        <select name="timezone"
+                                class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                            {% for tz in ['Europe/Madrid', 'UTC', 'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney'] %}
+                            <option value="{{ tz }}" {{ 'selected' if tz == 'Europe/Madrid' else '' }}>{{ tz }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Delivery -->
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-on-surface">Delivery</label>
+
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-[20px] text-primary">chat</span>
+                            <span class="text-sm text-on-surface">Telegram</span>
+                        </div>
+                        <div class="relative">
+                            <input type="hidden" name="send_telegram" value="false">
+                            <input type="checkbox" name="send_telegram" value="true" x-model="sendTelegram" class="sr-only peer">
+                            <div class="w-10 h-6 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-[20px] text-primary">mail</span>
+                            <span class="text-sm text-on-surface">Email</span>
+                        </div>
+                        <div class="relative">
+                            <input type="hidden" name="email_enabled" value="false">
+                            <input type="checkbox" name="email_enabled" value="true" x-model="emailEnabled" class="sr-only peer">
+                            <div class="w-10 h-6 bg-surface-container-high rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4"></div>
+                        </div>
+                    </label>
+
+                    <div x-show="emailEnabled" x-transition class="pl-8">
+                        <input type="text" name="email" placeholder="you@a.com, accountant@b.com"
+                               class="w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline">
+                        <p class="text-xs text-outline mt-1.5">Comma-separated list.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="submit"
+                            class="flex-1 bg-primary hover:bg-primary-container text-on-primary py-2.5 px-5 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+                        Create schedule
+                    </button>
+                    <button type="button" @click="scheduleOpen = false"
+                            class="px-4 py-2.5 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -103,6 +273,11 @@ function reportPage() {
     return {
         nlQuery: '',
         previewCount: 0,
+        scheduleOpen: false,
+
+        openScheduleModal() {
+            this.scheduleOpen = true;
+        },
 
         init() {
             // Listen for preview updates via HTMX

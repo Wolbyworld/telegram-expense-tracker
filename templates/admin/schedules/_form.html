@@ -4,7 +4,6 @@
         frequency: '{{ schedule.frequency }}',
         emailEnabled: {{ 'true' if schedule.email else 'false' }},
         sendTelegram: {{ 'true' if schedule.send_telegram else 'false' }},
-        showFilters: {{ 'true' if schedule.filters else 'false' }},
      }"
      class="bg-white rounded-2xl shadow-ambient border-2 border-primary/30 p-5">
 
@@ -19,6 +18,25 @@
 
     <form hx-patch="/admin/schedules/{{ schedule.id }}" hx-target="#schedule-list" hx-swap="innerHTML"
           class="space-y-4">
+
+        <!-- Read-only filter summary -->
+        {% set chips = filter_chips(schedule.filters, schedule.window) %}
+        <div class="bg-surface-container/50 rounded-xl p-3 space-y-2">
+            <p class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">What's reported</p>
+            {% if chips %}
+            <div class="flex flex-wrap gap-1.5">
+                {% for c in chips %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-on-surface text-xs">
+                    <span class="material-symbols-outlined text-[12px]">{{ c.icon }}</span>
+                    {{ c.label }}
+                </span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-xs italic text-outline">No filters set — all expenses.</p>
+            {% endif %}
+            <p class="text-[11px] text-outline">To change the filters, recreate from <a href="/admin/reports" class="text-primary hover:underline">Reports</a>.</p>
+        </div>
 
         <!-- Frequency -->
         <div>
@@ -37,11 +55,10 @@
             <input type="hidden" name="frequency" :value="frequency">
         </div>
 
-        <!-- Day of week -->
         <div x-show="frequency === 'weekly'" x-transition>
             <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Day of week</label>
             <select name="day_of_week"
-                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
                 {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
                 {% for d in range(7) %}
                 <option value="{{ d }}" {{ 'selected' if schedule.day_of_week == d else '' }}>{{ days[d] }}</option>
@@ -49,62 +66,42 @@
             </select>
         </div>
 
-        <!-- Day of month -->
         <div x-show="frequency === 'monthly'" x-transition>
             <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Day of month</label>
             <select name="day_of_month"
-                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
                 {% for d in range(1, 29) %}
                 <option value="{{ d }}" {{ 'selected' if schedule.day_of_month == d else '' }}>Day {{ d }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <!-- Time -->
         <div>
             <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Time</label>
             <input type="time" name="time_utc" value="{{ schedule.time_utc.strftime('%H:%M') }}"
-                   class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
+                   class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
         </div>
 
-        <!-- Timezone -->
         <div>
             <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Timezone</label>
             <select name="timezone"
-                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary">
-                {% set tz_options = ['Europe/Madrid', 'UTC', 'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney'] %}
-                {% for tz in tz_options %}
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                {% for tz in ['Europe/Madrid', 'UTC', 'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney'] %}
                 <option value="{{ tz }}" {{ 'selected' if schedule.timezone == tz else '' }}>{{ tz }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <!-- Data filters -->
+        <!-- Window -->
         <div>
-            <button type="button" @click="showFilters = !showFilters"
-                    class="flex items-center gap-2 text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors w-full">
-                <span class="material-symbols-outlined text-[16px] transition-transform duration-200"
-                      :class="showFilters ? 'rotate-90' : ''">chevron_right</span>
-                Data filters
-            </button>
-            <div x-show="showFilters" x-transition class="mt-2 space-y-2 pl-1">
-                <div>
-                    <label class="block text-xs font-medium text-on-surface-variant mb-1">Expense type</label>
-                    <select name="expense_type"
-                            class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
-                        <option value="all" {{ 'selected' if not schedule.filters or schedule.filters.get('expense_type', 'all') == 'all' else '' }}>All expenses</option>
-                        <option value="personal" {{ 'selected' if schedule.filters and schedule.filters.get('expense_type') == 'personal' else '' }}>Personal</option>
-                        <option value="company" {{ 'selected' if schedule.filters and schedule.filters.get('expense_type') == 'company' else '' }}>Company</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-on-surface-variant mb-1">Category</label>
-                    <input type="text" name="category"
-                           value="{{ schedule.filters.get('category', '') if schedule.filters else '' }}"
-                           placeholder="e.g. groceries, dining"
-                           class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline">
-                </div>
-            </div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">Reporting window</label>
+            <select name="window"
+                    class="w-full rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                <option value="">Default for {{ schedule.frequency }}</option>
+                {% for w in windows %}
+                <option value="{{ w.key }}" {{ 'selected' if schedule.window == w.key else '' }}>{{ w.label }}</option>
+                {% endfor %}
+            </select>
         </div>
 
         <!-- Delivery -->
@@ -113,7 +110,7 @@
 
             <label class="flex items-center justify-between cursor-pointer">
                 <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px] text-primary">send</span>
+                    <span class="material-symbols-outlined text-[18px] text-primary">chat</span>
                     <span class="text-sm text-on-surface">Telegram</span>
                 </div>
                 <div class="relative">
@@ -126,7 +123,7 @@
 
             <label class="flex items-center justify-between cursor-pointer">
                 <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px] text-primary">email</span>
+                    <span class="material-symbols-outlined text-[18px] text-primary">mail</span>
                     <span class="text-sm text-on-surface">Email</span>
                 </div>
                 <div class="relative">

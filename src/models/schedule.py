@@ -20,6 +20,10 @@ class ScheduledReport(Base):
     time_utc: Mapped[time] = mapped_column(Time, nullable=False)
     timezone: Mapped[str] = mapped_column(String(50), default="Europe/Madrid")
 
+    # Reporting window key (see src/services/report_presets.WINDOWS). When null,
+    # the runner derives a window from `frequency` for backwards compatibility.
+    window: Mapped[str | None] = mapped_column(String(30))
+
     email: Mapped[str | None] = mapped_column(String(255))
     send_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
 

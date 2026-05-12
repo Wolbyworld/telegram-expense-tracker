@@ -90,15 +90,19 @@
                 </span>
             </div>
 
-            <!-- Filters -->
-            {% if s.filters %}
-            <div class="flex items-center gap-2 text-on-surface-variant">
-                <span class="material-symbols-outlined text-[16px]">filter_alt</span>
-                <span>
-                    {% if s.filters.get('expense_type') %}{{ s.filters['expense_type'] | capitalize }}{% endif %}
-                    {% if s.filters.get('category') %} / {{ s.filters['category'] }}{% endif %}
-                    {% if not s.filters.get('expense_type') and not s.filters.get('category') %}No filters{% endif %}
-                </span>
+            <!-- What's in the report (window + filter chips) -->
+            {% set chips = filter_chips(s.filters, s.window) %}
+            {% if chips %}
+            <div class="flex items-start gap-2 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px] mt-0.5">filter_alt</span>
+                <div class="flex flex-wrap gap-1.5">
+                    {% for c in chips %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-xs">
+                        <span class="material-symbols-outlined text-[12px]">{{ c.icon }}</span>
+                        {{ c.label }}
+                    </span>
+                    {% endfor %}
+                </div>
             </div>
             {% endif %}
 

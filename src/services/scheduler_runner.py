@@ -1,7 +1,8 @@
 """APScheduler job runner for ScheduledReport delivery."""
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
@@ -13,6 +14,7 @@ from src.bot.telegram_bot import get_bot
 from src.models.database import async_session
 from src.models.schedule import ScheduledReport
 from src.schemas.expense import ExpenseCategory, ReportFilter
+from src.services import report_presets
 from src.services.email_service import parse_recipients, send_report_email
 from src.services.report_service import generate_csv, generate_pdf
 
@@ -124,33 +126,43 @@ def remove(schedule_id: int) -> None:
 
 
 def _build_filter_window(sch: ScheduledReport) -> tuple[date | None, date | None]:
-    """Default reporting window: the period just elapsed before this run."""
+    """Resolve the schedule's window field, falling back to a frequency default."""
     today = datetime.now(ZoneInfo(sch.timezone or "UTC")).date()
-    if sch.frequency == "daily":
-        d = today - timedelta(days=1)
-        return d, d
-    if sch.frequency == "weekly":
-        return today - timedelta(days=7), today - timedelta(days=1)
-    if sch.frequency == "monthly":
-        return today - timedelta(days=30), today - timedelta(days=1)
-    return None, None
+    key = sch.window or report_presets.window_for_frequency(sch.frequency)
+    return report_presets.resolve(key, today)
+
+
+def _coerce_decimal(value) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _coerce_category(value) -> ExpenseCategory | None:
+    if not value:
+        return None
+    try:
+        return ExpenseCategory(str(value).capitalize())
+    except ValueError:
+        return None
 
 
 def _build_report_filter(sch: ScheduledReport) -> ReportFilter:
     filters_dict = sch.filters or {}
     date_from, date_to = _build_filter_window(sch)
-    category = filters_dict.get("category")
-    cat_enum = None
-    if category:
-        try:
-            cat_enum = ExpenseCategory(category.capitalize())
-        except ValueError:
-            cat_enum = None
     return ReportFilter(
         date_from=date_from,
         date_to=date_to,
-        category=cat_enum,
-        expense_type=filters_dict.get("expense_type"),
+        vendor=filters_dict.get("vendor") or None,
+        category=_coerce_category(filters_dict.get("category")),
+        location=filters_dict.get("location") or None,
+        currency=filters_dict.get("currency") or None,
+        amount_min=_coerce_decimal(filters_dict.get("amount_min")),
+        amount_max=_coerce_decimal(filters_dict.get("amount_max")),
+        expense_type=filters_dict.get("expense_type") or None,
     )
 
 
