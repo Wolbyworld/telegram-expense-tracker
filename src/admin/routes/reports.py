@@ -14,7 +14,10 @@ from src.admin.dependencies import get_db
 from src.config import settings
 from src.models.expense import Expense
 from src.schemas.expense import ExpenseCategory, ReportFilter
+from src.services import report_presets, scheduler_runner
+from src.services.email_service import parse_recipients
 from src.services.expense_service import list_expenses
+from src.services.scheduler_service import create_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +105,42 @@ async def reports_page(request: Request):
             "active_page": "reports",
             "categories": category_values,
             "today": date.today().isoformat(),
+            "presets": report_presets.PRESETS,
+            "windows": report_presets.WINDOWS,
+        },
+    )
+
+
+@router.post("/reports/apply-preset")
+async def apply_preset(request: Request, db: AsyncSession = Depends(get_db)):
+    """Apply a named preset to the filter form and return the pre-filled partial."""
+    form = await request.form()
+    preset_key = form.get("preset_key", "")
+    preset = report_presets.get_preset(preset_key)
+    if preset is None:
+        return Response(status_code=404, content=f"Unknown preset: {preset_key}")
+
+    date_from, date_to = report_presets.resolve(preset.window, date.today())
+    kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if preset.filters.get("expense_type"):
+        kwargs["expense_type"] = preset.filters["expense_type"]
+    cat = preset.filters.get("category")
+    if cat:
+        try:
+            kwargs["category"] = ExpenseCategory(cat.capitalize())
+        except ValueError:
+            pass
+    filters = ReportFilter(**kwargs)
+
+    preview = await _compute_preview(db, filters)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/reports/_filter_form.html",
+        context={
+            "categories": [c.value for c in ExpenseCategory],
+            "filters": filters,
+            "preset_applied": preset.label,
+            "preview": preview,
         },
     )
 
@@ -193,3 +232,74 @@ async def generate_report(request: Request, db: AsyncSession = Depends(get_db)):
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+
+def _filters_for_schedule(form: dict) -> dict:
+    """Extract non-date filter fields from a Reports filter-form submission."""
+    out: dict = {}
+    if form.get("expense_type") and form["expense_type"] != "all":
+        out["expense_type"] = form["expense_type"]
+    if form.get("category"):
+        out["category"] = form["category"]
+    if form.get("vendor"):
+        out["vendor"] = form["vendor"]
+    if form.get("location"):
+        out["location"] = form["location"]
+    if form.get("currency") and form["currency"] != "all":
+        out["currency"] = form["currency"]
+    if form.get("amount_min"):
+        try:
+            out["amount_min"] = str(Decimal(form["amount_min"]))
+        except Exception:
+            pass
+    if form.get("amount_max"):
+        try:
+            out["amount_max"] = str(Decimal(form["amount_max"]))
+        except Exception:
+            pass
+    return out
+
+
+@router.post("/reports/schedule")
+async def schedule_from_report(request: Request, db: AsyncSession = Depends(get_db)):
+    """Create a ScheduledReport from the current Reports filter state.
+
+    Reads non-date filter fields from the form plus the cadence/window/recipient
+    fields submitted by the Schedule-this modal.
+    """
+    form_data = await request.form()
+    form = dict(form_data)
+    user_id = _get_user_id()
+
+    frequency = form.get("frequency", "weekly")
+    window_key = form.get("window") or None
+    if window_key and not report_presets.window_label(window_key):
+        return Response(status_code=400, content=f"Unknown window: {window_key}")
+
+    email_enabled = form.get("email_enabled") == "true"
+    email_raw = form.get("email", "")
+    addrs = parse_recipients(email_raw)
+    email_value = ", ".join(addrs) if (email_enabled and addrs) else None
+
+    send_telegram = form.get("send_telegram") == "true"
+
+    day_of_week = form.get("day_of_week")
+    day_of_month = form.get("day_of_month")
+
+    data = {
+        "frequency": frequency,
+        "day_of_week": int(day_of_week) if (frequency == "weekly" and day_of_week) else None,
+        "day_of_month": int(day_of_month) if (frequency == "monthly" and day_of_month) else None,
+        "time_utc": form.get("time_utc", "09:00"),
+        "timezone": form.get("timezone", "Europe/Madrid"),
+        "window": window_key,
+        "send_telegram": send_telegram,
+        "email": email_value,
+        "filters": _filters_for_schedule(form) or None,
+    }
+    sch = await create_schedule(db, user_id, data)
+    await scheduler_runner.sync_schedule(db, sch.id)
+    return Response(
+        status_code=200,
+        headers={"HX-Redirect": "/admin/schedules"},
+    )

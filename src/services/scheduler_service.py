@@ -28,6 +28,7 @@ async def create_schedule(
         day_of_month=data.get("day_of_month"),
         time_utc=data["time_utc"] if isinstance(data["time_utc"], dt_time) else dt_time.fromisoformat(data["time_utc"]),
         timezone=data.get("timezone", "Europe/Madrid"),
+        window=data.get("window") or None,
         email=data.get("email") or None,
         send_telegram=data.get("send_telegram", True),
         filters=data.get("filters"),
