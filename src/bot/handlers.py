@@ -488,7 +488,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "\n".join(summary_lines),
         parse_mode="Markdown",
-        reply_markup=receipt_confirmation_keyboard(expense.id),
+        reply_markup=receipt_confirmation_keyboard(
+            expense.id, include_type_buttons=settings.confirm_expense_type
+        ),
     )
 
 

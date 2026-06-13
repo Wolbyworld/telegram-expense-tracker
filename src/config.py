@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     timezone: str = "Europe/Madrid"
     allowed_telegram_users: str = ""  # Comma-separated user IDs
 
+    # Receipt tagging
+    # When True, the bot asks "Company / Personal" after each receipt before the
+    # expense is tagged. When False (default), receipts are saved straight away
+    # (untagged, no confirmation step) — the tag can still be set later via /edit.
+    confirm_expense_type: bool = False
+
     @property
     def allowed_user_ids(self) -> set[int]:
         if not self.allowed_telegram_users:

@@ -1,17 +1,20 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def receipt_confirmation_keyboard(expense_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
+def receipt_confirmation_keyboard(
+    expense_id: int, include_type_buttons: bool = True
+) -> InlineKeyboardMarkup:
+    rows = []
+    if include_type_buttons:
+        rows.append([
             InlineKeyboardButton("💼 Company", callback_data=f"tag_company:{expense_id}"),
             InlineKeyboardButton("👤 Personal", callback_data=f"tag_personal:{expense_id}"),
-        ],
-        [
-            InlineKeyboardButton("Edit", callback_data=f"edit:{expense_id}"),
-            InlineKeyboardButton("Discard", callback_data=f"discard:{expense_id}"),
-        ],
+        ])
+    rows.append([
+        InlineKeyboardButton("Edit", callback_data=f"edit:{expense_id}"),
+        InlineKeyboardButton("Discard", callback_data=f"discard:{expense_id}"),
     ])
+    return InlineKeyboardMarkup(rows)
 
 
 def delete_confirmation_keyboard(expense_id: int) -> InlineKeyboardMarkup:
