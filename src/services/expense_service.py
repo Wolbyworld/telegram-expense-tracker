@@ -32,6 +32,7 @@ async def create_expense(
         location_country=data.location_country,
         line_items=[item.model_dump() for item in data.line_items] if data.line_items else None,
         source=data.source,
+        expense_type="company",
         confidence=data.confidence,
         receipt_path=receipt_path,
         raw_llm_response=raw_llm_response,

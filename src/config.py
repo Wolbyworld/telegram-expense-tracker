@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # Receipt tagging
     # When True, the bot asks "Company / Personal" after each receipt before the
     # expense is tagged. When False (default), receipts are saved straight away
-    # (untagged, no confirmation step) — the tag can still be set later via /edit.
+    # as company expenses, without a confirmation step.
     confirm_expense_type: bool = False
 
     @property
