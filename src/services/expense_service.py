@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.expense import Expense
@@ -19,7 +19,9 @@ async def create_expense(
     receipt_path: str | None = None,
     raw_llm_response: dict | None = None,
     image_hash: str | None = None,
+    commit: bool = True,
 ) -> Expense:
+    await session.execute(text("SELECT pg_advisory_xact_lock(:owner)"), {"owner": user_id})
     expense = Expense(
         telegram_user_id=user_id,
         vendor=data.vendor,
@@ -32,6 +34,7 @@ async def create_expense(
         location_country=data.location_country,
         line_items=[item.model_dump() for item in data.line_items] if data.line_items else None,
         source=data.source,
+        expense_type="company",
         confidence=data.confidence,
         receipt_path=receipt_path,
         raw_llm_response=raw_llm_response,
@@ -44,8 +47,11 @@ async def create_expense(
         expense.exchange_rate = Decimal("1.000000")
 
     session.add(expense)
-    await session.commit()
-    await session.refresh(expense)
+    if commit:
+        await session.commit()
+        await session.refresh(expense)
+    else:
+        await session.flush()
     logger.info("Expense #%d created for user %d", expense.id, user_id)
     return expense
 

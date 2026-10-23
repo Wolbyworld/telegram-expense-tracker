@@ -9,6 +9,10 @@ Snap a receipt → GPT-5.4-mini vision extracts vendor / amount / currency /
 date / line items → everything lands in Postgres → you can query it from
 Telegram (`/report "restaurants last month"`) or from the `/admin` web UI.
 
+Email intake and CLI imports use a durable receipt review inbox. Receiving is opt-in;
+see [email intake setup and operations](docs/email-intake.md) for approval requirements,
+duplicate behavior, supported formats, tests and rollback.
+
 <p align="center">
   <img src="docs/telegram-bot.png" alt="Telegram bot receipt parsing" width="320">
   &nbsp;&nbsp;

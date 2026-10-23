@@ -1,14 +1,21 @@
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from src.config import settings
 from src.models.database import Base
 
 # Import all models so they are registered with Base.metadata
 from src.models.exchange_rate import ExchangeRate  # noqa: F401
 from src.models.expense import Expense  # noqa: F401
+from src.models.intake import (  # noqa: F401
+    IncomingMessage,
+    IntakeAttempt,
+    IntakeDecision,
+    IntakePollState,
+    ReceiptCandidate,
+)
 from src.models.schedule import ScheduledReport  # noqa: F401
 
 config = context.config

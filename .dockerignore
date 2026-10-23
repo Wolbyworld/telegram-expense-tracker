@@ -36,3 +36,6 @@ scripts/__pycache__/
 dist/
 build/
 *.egg-info/
+# macOS metadata is not Python source (Alembic scans migration filenames).
+**/._*
+**/.DS_Store

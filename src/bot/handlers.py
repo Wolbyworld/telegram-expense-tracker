@@ -1,13 +1,10 @@
 import io
 import logging
-import os
 import re
-import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from PIL import Image as PILImage
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -21,42 +18,12 @@ from src.config import settings
 from src.models import async_session
 from src.models.expense import Expense
 from src.schemas.expense import ExpenseCategory, ExpenseCreate, ReportFilter
-from src.services import expense_service, receipt_parser, report_agent
+from src.services import expense_service, report_agent
 from src.services.currency_service import convert_to_base
-from src.services.dedup_service import compute_image_hash, find_duplicate
-from src.services.image_enhance import enhance_receipt
 from src.services.report_service import generate_csv, generate_pdf
 from src.utils.filters import parse_filters
 
 logger = logging.getLogger(__name__)
-
-
-def _enhance_image(raw_bytes: bytes) -> bytes:
-    """Enhance receipt image, return enhanced JPEG bytes."""
-    img = PILImage.open(io.BytesIO(raw_bytes))
-    enhanced = enhance_receipt(img)
-    buf = io.BytesIO()
-    enhanced.save(buf, "JPEG", quality=90)
-    return buf.getvalue()
-
-
-def _save_receipt_images(
-    receipt_dir: str, filename: str, raw_bytes: bytes, enhanced_bytes: bytes,
-) -> tuple[str, str]:
-    """Save raw and enhanced receipt images. Returns (raw_path, enhanced_path)."""
-    os.makedirs(receipt_dir, exist_ok=True)
-    enhanced_dir = os.path.join(receipt_dir, "enhanced")
-    os.makedirs(enhanced_dir, exist_ok=True)
-
-    raw_path = os.path.join(receipt_dir, filename)
-    enhanced_path = os.path.join(enhanced_dir, filename)
-
-    with open(raw_path, "wb") as f:
-        f.write(raw_bytes)
-    with open(enhanced_path, "wb") as f:
-        f.write(enhanced_bytes)
-
-    return raw_path, enhanced_path
 
 
 def authorized(func):
@@ -316,7 +283,7 @@ async def nuke_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     from src.bot.keyboards import nuke_confirmation_keyboard
 
     async with async_session() as session:
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         result = await session.execute(
             select(func.count()).where(
                 Expense.telegram_user_id == update.effective_user.id
@@ -355,141 +322,79 @@ async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 @authorized
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle receipt photos."""
-    await update.message.reply_text("Processing receipt...")
+    """Use the same durable receipt service as email and the operator CLI."""
+    from src.services import receipt_intake
 
+    await update.message.reply_text("Processing receipt...")
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await file.download_as_bytearray())
-
-    # Enhance image for better GPT accuracy (~100ms)
     try:
-        enhanced_bytes = _enhance_image(image_bytes)
-    except Exception:
-        logger.warning("Image enhancement failed, using raw image")
-        enhanced_bytes = image_bytes
-
-    # Compute perceptual hash on RAW image for dedup consistency
-    img_hash = compute_image_hash(image_bytes)
-
-    # Send ENHANCED image to GPT for parsing
-    try:
-        parsed, raw_response = await receipt_parser.parse_receipt(enhanced_bytes)
-    except Exception:
-        logger.exception("Failed to parse receipt")
-        await update.message.reply_text(
-            "Sorry, I couldn't read this receipt. Please try again with a clearer photo."
+        candidate = await receipt_intake.register_source(
+            update.effective_user.id, "telegram",
+            f"{update.effective_chat.id}:{update.message.message_id}",
+            image_bytes, "image/jpeg", "Telegram receipt.jpg",
         )
-        return
-
-    expense_date = date.fromisoformat(parsed.date)
-
-    # Check for duplicates
-    async with async_session() as session:
-        dup = await find_duplicate(
-            session,
-            update.effective_user.id,
-            img_hash,
-            vendor=parsed.vendor,
-            amount=parsed.total_amount,
-            currency=parsed.currency,
-            expense_date=expense_date,
-        )
-
-    if dup:
-        # Store pending expense data in context for "save anyway"
-        # Key by UUID so multiple concurrent duplicates don't overwrite each other
-        dup_key = uuid.uuid4().hex
-        context.user_data.setdefault("pending_expenses", {})[dup_key] = {
-            "parsed": parsed,
-            "raw_response": raw_response,
-            "image_bytes": image_bytes,
-            "enhanced_bytes": enhanced_bytes,
-            "image_hash": img_hash,
-            "caption": update.message.caption,
-        }
-        await update.message.reply_text(
-            f"Possible duplicate of expense #{dup.id}:\n"
-            f"{dup.date} | {dup.original_amount} {dup.original_currency}"
-            + (f" | {dup.vendor}" if dup.vendor else ""),
-            reply_markup=duplicate_keyboard(dup_key),
-        )
-        return
-
-    # Save raw + enhanced receipt images to disk
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    receipt_filename = f"{update.effective_user.id}_{timestamp}.jpg"
-    receipt_path, _ = _save_receipt_images(
-        settings.receipt_storage_path, receipt_filename, image_bytes, enhanced_bytes,
-    )
-
-    data = ExpenseCreate(
-        vendor=parsed.vendor,
-        description=parsed.description,
-        category=parsed.category,
-        date=expense_date,
-        original_amount=Decimal(str(parsed.total_amount)),
-        original_currency=parsed.currency,
-        location_city=parsed.location_city,
-        location_country=parsed.location_country,
-        line_items=parsed.line_items,
-        source="image",
-        confidence=parsed.confidence,
-    )
-
-    if update.message.caption:
-        data.description = update.message.caption
-
-    eur_amount: Decimal | None = None
-    async with async_session() as session:
-        expense = await expense_service.create_expense(
-            session,
-            update.effective_user.id,
-            data,
-            receipt_path=receipt_path,
-            raw_llm_response=raw_response,
-            image_hash=img_hash,
-        )
-        logger.info("Saved expense #%d: %s %s %s date=%s", expense.id, parsed.vendor, parsed.total_amount, parsed.currency, parsed.date)
-        # Currency conversion
-        if parsed.currency != settings.base_currency:
-            result = await convert_to_base(
-                session, Decimal(str(parsed.total_amount)), parsed.currency,
-                expense_date,
+        candidate = await receipt_intake.process_candidate(candidate.id, update.effective_user.id)
+        if candidate.status == "needs_review" and not candidate.error_code:
+            edits = {"description": update.message.caption} if update.message.caption else None
+            candidate = await receipt_intake.decide(
+                candidate.id, update.effective_user.id, "accept", "telegram", edits=edits,
             )
-            if result:
-                eur_amount = result[0]
-                await expense_service.update_expense(
-                    session, update.effective_user.id, expense.id,
-                    eur_amount=result[0], exchange_rate=result[1],
+    except Exception:
+        logger.exception("Receipt intake failed")
+        await update.message.reply_text("I couldn't process this receipt. Please try again later.")
+        return
+    if candidate.status == "duplicate_candidate":
+        match = (f"expense #{candidate.duplicate_expense_id}" if candidate.duplicate_expense_id
+                 else "another pending receipt")
+        await update.message.reply_text(
+            f"Possible duplicate of {match}. This review is saved and survives restarts.",
+            reply_markup=duplicate_keyboard(candidate.id),
+        )
+    elif candidate.status == "committed":
+        await _reply_saved_receipt(update.message, candidate)
+    elif candidate.status == "linked_duplicate":
+        await update.message.reply_text(f"Already linked to expense #{candidate.expense_id}.")
+    elif candidate.status == "rejected":
+        await update.message.reply_text("This receipt was already discarded.")
+    else:
+        await update.message.reply_text(
+            "This receipt needs attention. It is saved in the private Receipt inbox for review."
+        )
+
+
+async def _reply_saved_receipt(message, candidate):
+    """Conversion is independent from receipt commit; a failure never repeats the insert."""
+    parsed = candidate.parsed or {}
+    async with async_session() as session:
+        expense = await expense_service.get_expense(
+            session, candidate.owner_id, candidate.expense_id,
+        )
+        if not expense:
+            await message.reply_text("The saved expense has since been deleted.")
+            return
+        if expense.original_currency != settings.base_currency and expense.eur_amount is None:
+            try:
+                result = await convert_to_base(
+                    session, expense.original_amount, expense.original_currency, expense.date,
                 )
-
-    amount_line = f"Amount: {parsed.total_amount} {parsed.currency}"
-    if parsed.currency != settings.base_currency:
-        if eur_amount is not None:
-            amount_line += f" (≈ {eur_amount:.2f} {settings.base_currency})"
-        else:
-            amount_line += f" ({settings.base_currency} rate unavailable)"
-
-    summary_lines = [
-        f"*Receipt #{expense.id} saved* (confidence: {parsed.confidence:.0%})",
-        "",
-        f"Vendor: {parsed.vendor or 'Unknown'}",
-        f"Date: {parsed.date}",
-        amount_line,
-        f"Category: {parsed.category}",
-    ]
-    if parsed.location_city or parsed.location_country:
-        location = ", ".join(filter(None, [parsed.location_city, parsed.location_country]))
-        summary_lines.append(f"Location: {location}")
-    if parsed.line_items:
-        summary_lines.append(f"Items: {len(parsed.line_items)}")
-
-    await update.message.reply_text(
-        "\n".join(summary_lines),
-        parse_mode="Markdown",
+                if result:
+                    await expense_service.update_expense(
+                        session, candidate.owner_id, expense.id,
+                        eur_amount=result[0], exchange_rate=result[1],
+                    )
+            except Exception:
+                logger.warning("Currency conversion pending for expense #%d", expense.id)
+    await message.reply_text(
+        f"Receipt #{candidate.expense_id} saved (Company)\n\n"
+        f"Vendor: {parsed.get('vendor') or 'Unknown'}\n"
+        f"Date: {parsed.get('date')}\n"
+        f"Amount: {parsed.get('total_amount')} {parsed.get('currency')}\n"
+        f"Category: {parsed.get('category')}\n"
+        f"Confidence: {float(parsed.get('confidence') or 0):.0%}",
         reply_markup=receipt_confirmation_keyboard(
-            expense.id, include_type_buttons=settings.confirm_expense_type
+            candidate.expense_id, include_type_buttons=settings.confirm_expense_type,
         ),
     )
 
@@ -556,18 +461,23 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         filters = _period_to_filters(param)
         await _send_report(query, filters)
 
-    elif action == "dup_save":
-        await query.edit_message_reply_markup(reply_markup=None)
-        pending = context.user_data.get("pending_expenses", {}).pop(param, None)
-        if not pending:
-            await query.message.reply_text("No pending expense to save (already handled?).")
-            return
-        await _save_pending_expense(query, context, pending)
+    elif action in ("dup_save", "dup_discard"):
+        from src.services.receipt_intake import decide
 
-    elif action == "dup_discard":
+        try:
+            candidate = await decide(
+                param, update.effective_user.id,
+                "save_separate" if action == "dup_save" else "reject", "telegram",
+                override_reason="Explicit Telegram Save anyway",
+            )
+        except ValueError:
+            await query.message.reply_text("No pending receipt available for this account.")
+            return
         await query.edit_message_reply_markup(reply_markup=None)
-        context.user_data.get("pending_expenses", {}).pop(param, None)
-        await query.message.reply_text("Duplicate discarded.")
+        if candidate.status == "committed":
+            await _reply_saved_receipt(query.message, candidate)
+        else:
+            await query.message.reply_text("Duplicate discarded.")
 
     elif action == "nuke_yes":
         await query.edit_message_reply_markup(reply_markup=None)
@@ -580,74 +490,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif action == "nuke_no":
         await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text("Nuke cancelled.")
-
-
-async def _save_pending_expense(query, context, pending: dict) -> None:
-    """Save a pending expense that was flagged as potential duplicate."""
-    parsed = pending["parsed"]
-    raw_response = pending["raw_response"]
-    image_bytes = pending["image_bytes"]
-    enhanced_bytes = pending.get("enhanced_bytes", image_bytes)
-    img_hash = pending["image_hash"]
-    caption = pending["caption"]
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    user_id = query.from_user.id
-    receipt_filename = f"{user_id}_{timestamp}.jpg"
-    receipt_path, _ = _save_receipt_images(
-        settings.receipt_storage_path, receipt_filename, image_bytes, enhanced_bytes,
-    )
-
-    data = ExpenseCreate(
-        vendor=parsed.vendor,
-        description=caption or parsed.description,
-        category=parsed.category,
-        date=date.fromisoformat(parsed.date),
-        original_amount=Decimal(str(parsed.total_amount)),
-        original_currency=parsed.currency,
-        location_city=parsed.location_city,
-        location_country=parsed.location_country,
-        line_items=parsed.line_items,
-        source="image",
-        confidence=parsed.confidence,
-    )
-
-    eur_amount: Decimal | None = None
-    async with async_session() as session:
-        expense = await expense_service.create_expense(
-            session, user_id, data,
-            receipt_path=receipt_path,
-            raw_llm_response=raw_response,
-            image_hash=img_hash,
-        )
-        logger.info("Saved dup-override expense #%d: %s %s %s date=%s", expense.id, parsed.vendor, parsed.total_amount, parsed.currency, parsed.date)
-        if parsed.currency != settings.base_currency:
-            result = await convert_to_base(
-                session, Decimal(str(parsed.total_amount)), parsed.currency,
-                date.fromisoformat(parsed.date),
-            )
-            if result:
-                eur_amount = result[0]
-                await expense_service.update_expense(
-                    session, user_id, expense.id,
-                    eur_amount=result[0], exchange_rate=result[1],
-                )
-
-    amount_line = f"Amount: {parsed.total_amount} {parsed.currency}"
-    if parsed.currency != settings.base_currency:
-        if eur_amount is not None:
-            amount_line += f" (≈ {eur_amount:.2f} {settings.base_currency})"
-        else:
-            amount_line += f" ({settings.base_currency} rate unavailable)"
-
-    await query.message.reply_text(
-        f"*Receipt #{expense.id} saved* (duplicate override)\n\n"
-        f"Vendor: {parsed.vendor or 'Unknown'}\n"
-        f"Date: {parsed.date}\n"
-        f"{amount_line}\n"
-        f"Category: {parsed.category}",
-        parse_mode="Markdown",
-    )
 
 
 async def _send_report(source, filters: ReportFilter) -> None:
@@ -722,8 +564,12 @@ def _infer_category(description: str) -> ExpenseCategory:
     """Simple keyword-based category inference for manual entries."""
     desc_lower = description.lower()
     keywords = {
-        ExpenseCategory.TRANSPORT: ["taxi", "uber", "lyft", "bus", "train", "metro", "flight", "airport"],
-        ExpenseCategory.FOOD: ["restaurant", "lunch", "dinner", "breakfast", "coffee", "cafe", "food", "meal"],
+        ExpenseCategory.TRANSPORT: [
+            "taxi", "uber", "lyft", "bus", "train", "metro", "flight", "airport",
+        ],
+        ExpenseCategory.FOOD: [
+            "restaurant", "lunch", "dinner", "breakfast", "coffee", "cafe", "food", "meal",
+        ],
         ExpenseCategory.ACCOMMODATION: ["hotel", "airbnb", "hostel", "booking", "room"],
         ExpenseCategory.ENTERTAINMENT: ["cinema", "theater", "concert", "museum", "show"],
         ExpenseCategory.SHOPPING: ["shop", "store", "market", "mall", "purchase"],

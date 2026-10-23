@@ -3,6 +3,7 @@
 import io
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 import imagehash
 from PIL import Image
@@ -69,13 +70,13 @@ async def find_duplicate(
                 return exp
 
     # Check 2: content-based match (vendor + amount + date + currency)
-    if vendor and amount and currency and expense_date:
+    if vendor and amount is not None and currency and expense_date:
         for exp in existing:
             if (
                 exp.vendor
-                and exp.vendor.lower() == vendor.lower()
-                and float(exp.original_amount) == amount
-                and exp.original_currency == currency
+                and " ".join(exp.vendor.casefold().split()) == " ".join(vendor.casefold().split())
+                and exp.original_amount == Decimal(str(amount))
+                and exp.original_currency.upper() == currency.upper()
                 and exp.date == expense_date
             ):
                 logger.info("Duplicate detected (content match): expense #%d", exp.id)
