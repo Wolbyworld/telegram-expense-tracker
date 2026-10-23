@@ -153,6 +153,16 @@ async def find_matches(session, candidate, data):
         .all()
     )
     for peer in peers:
+        # Even inconsistent extraction of body versus attachment must not silently
+        # produce a second expense from the same email. A reviewer can link them,
+        # reject redundant evidence, or explicitly save a separate purchase.
+        same_email_evidence = bool(
+            candidate.message_id
+            and candidate.message_id == peer.message_id
+            and (candidate.source_key == candidate.message_id + ":body")
+            != (peer.source_key == peer.message_id + ":body")
+            and peer.status in {"committed", "linked_duplicate"}
+        )
         exact = candidate.sha256 == peer.sha256
         visual = False
         if candidate.image_hash and peer.image_hash:
@@ -178,13 +188,21 @@ async def find_matches(session, candidate, data):
             except ValueError:
                 pass
         # For pending peers, only the earlier candidate blocks the later one.
-        if (exact or visual or content) and (
+        if (exact or visual or content or same_email_evidence) and (
             peer.status in {"committed", "linked_duplicate"}
             or (peer.created_at, peer.id) < (candidate.created_at, candidate.id)
         ):
             candidate.duplicate_candidate_id = peer.id
             candidate.duplicate_expense_id = peer.expense_id
-            candidate.duplicate_reason = "exact_file" if exact else "image" if visual else "content"
+            candidate.duplicate_reason = (
+                "exact_file"
+                if exact
+                else "image"
+                if visual
+                else "content"
+                if content
+                else "same_email_evidence"
+            )
             return
     duplicate = await find_duplicate(
         session,

@@ -84,7 +84,11 @@ async def db(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "resend_receiving_api_key", "synthetic-not-a-key")
 
     async def fake_extract(candidate):
-        return parsed(), parsed().model_dump(mode="json"), "a" * 16
+        return (
+            parsed(),
+            parsed().model_dump(mode="json"),
+            None if candidate.mime_type == "text/plain" else "a" * 16,
+        )
 
     monkeypatch.setattr(receipt_intake, "_extract", fake_extract)
     yield factory
@@ -318,7 +322,7 @@ async def test_poll_replay_sender_auth_and_no_autosave(db):
     await email_intake.poll_once(provider)
     assert provider.downloads == 1
     async with db() as session:
-        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 1
+        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 2
         assert await session.scalar(select(func.count()).select_from(Expense)) == 0
         messages = (await session.execute(select(IncomingMessage))).scalars().all()
         assert {row.external_id: row.status for row in messages} == {
@@ -326,8 +330,11 @@ async def test_poll_replay_sender_auth_and_no_autosave(db):
             "bad-auth": "quarantined",
             "unknown": "quarantined",
         }
-        candidate = (await session.execute(select(ReceiptCandidate))).scalar_one()
-        assert candidate.status == "needs_review"
+        candidates = (await session.execute(select(ReceiptCandidate))).scalars().all()
+        assert sorted(candidate.status for candidate in candidates) == [
+            "duplicate_candidate",
+            "needs_review",
+        ]
 
 
 @pytest.mark.asyncio
@@ -622,3 +629,169 @@ async def test_missing_scanner_fails_closed(monkeypatch, tmp_path):
     source.write_text("Synthetic receipt")
     with pytest.raises(UnsafeReceiptError, match="scanner_unavailable"):
         await scan_file(source)
+
+
+class OneReceiptEmail(FakeReceiving):
+    def __init__(self, *, plain=None, html=None, filename="receipt.jpg", inline=False):
+        super().__init__()
+        self.plain = plain
+        self.html = html
+        self.filename = filename
+        self.inline = inline
+
+    async def get(self, path, params=None):
+        result = await super().get(path, params)
+        if path == "/emails/receiving":
+            result["data"] = result["data"][:1]
+        elif path == "/emails/receiving/mail-1":
+            result["text"] = self.plain
+            result["html"] = self.html
+            if self.filename is None:
+                result["attachments"] = []
+            else:
+                result["attachments"][0].update(
+                    {
+                        "filename": self.filename,
+                        "content_disposition": "inline" if self.inline else "attachment",
+                        "content_id": "signature-logo" if self.inline else None,
+                    }
+                )
+        return result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("format,filename", [("text", "signature.png"), ("html", "logo.png")])
+async def test_body_receipt_is_not_skipped_for_inline_artwork(db, monkeypatch, format, filename):
+    from pathlib import Path
+
+    receipt_text = "Synthetic Cafe\n2026-10-23\nReceipt total EUR 12.34"
+    provider = OneReceiptEmail(
+        plain=receipt_text if format == "text" else None,
+        html=f'<p>{receipt_text}</p><img src="cid:signature-logo">' if format == "html" else None,
+        filename=filename,
+        inline=True,
+    )
+    extracted_bodies = []
+
+    async def extract(candidate):
+        result = parsed()
+        if candidate.mime_type == "text/plain":
+            extracted_bodies.append(Path(candidate.receipt_path).read_text())
+            return result, result.model_dump(mode="json"), None
+        result.vendor = "Signature artwork"
+        result.total_amount = 0
+        result.confidence = 0.1
+        return result, result.model_dump(mode="json"), "a" * 16
+
+    monkeypatch.setattr(receipt_intake, "_extract", extract)
+    await email_intake.poll_once(provider)
+    await email_intake.poll_once(provider)
+    assert len(extracted_bodies) == 1 and "Receipt total EUR 12.34" in extracted_bodies[0]
+    async with db() as session:
+        rows = (await session.execute(select(ReceiptCandidate))).scalars().all()
+        assert len(rows) == 2
+        body = next(row for row in rows if row.mime_type == "text/plain")
+        assert body.status == "needs_review"
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+    accepted = await receipt_intake.decide(body.id, 101, "accept", "test")
+    assert accepted.status == "committed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first_kind", ["body", "attachment"])
+@pytest.mark.parametrize("matching_vendor", [True, False])
+async def test_body_and_attachment_do_not_silently_create_two_expenses(
+    db,
+    monkeypatch,
+    first_kind,
+    matching_vendor,
+):
+    provider = OneReceiptEmail(plain="Synthetic Cafe receipt total EUR 12.34")
+
+    async def extract(candidate):
+        result = parsed()
+        if candidate.mime_type == "text/plain" and not matching_vendor:
+            result.vendor = "Different extracted merchant name"
+        return (
+            result,
+            result.model_dump(mode="json"),
+            (None if candidate.mime_type == "text/plain" else "a" * 16),
+        )
+
+    monkeypatch.setattr(receipt_intake, "_extract", extract)
+    await email_intake.poll_once(provider)
+    async with db() as session:
+        rows = (await session.execute(select(ReceiptCandidate))).scalars().all()
+        body = next(row for row in rows if row.mime_type == "text/plain")
+        attachment = next(row for row in rows if row.mime_type != "text/plain")
+    first, second = (body, attachment) if first_kind == "body" else (attachment, body)
+    accepted = await receipt_intake.decide(first.id, 101, "accept", "test")
+    # A pending duplicate can block ordinary acceptance in either order; explicitly
+    # choose the first evidence while keeping all later acceptance checks active.
+    if accepted.status == "duplicate_candidate":
+        accepted = await receipt_intake.decide(
+            first.id, 101, "save_separate", "test", override_reason="Select primary evidence"
+        )
+    held = await receipt_intake.decide(second.id, 101, "accept", "test")
+    assert held.status == "duplicate_candidate"
+    assert held.duplicate_expense_id == accepted.expense_id
+    if not matching_vendor:
+        assert held.duplicate_reason == "same_email_evidence"
+    async with db() as session:
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 1
+    linked = await receipt_intake.decide(
+        second.id, 101, "link", "test", expense_id=accepted.expense_id
+    )
+    assert linked.status == "linked_duplicate"
+    async with db() as session:
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 1
+
+
+@pytest.mark.asyncio
+async def test_oversized_html_cannot_create_a_partial_receipt_candidate(db):
+    # Before the fix, slicing inside this comment left a plausible subtotal while
+    # hiding the real total after the cutoff.
+    html = (
+        "<p>Receipt subtotal EUR 12.34</p><!--"
+        + "x" * 100_100
+        + "--><p>Actual final total EUR 99.95</p>"
+    )
+    provider = OneReceiptEmail(html=html, filename=None)
+    await email_intake.poll_once(provider)
+    async with db() as session:
+        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 0
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+        message = (await session.execute(select(IncomingMessage))).scalar_one()
+        assert message.status == "quarantined"
+        assert message.error_code == "email_html_size_limit"
+
+
+def test_oversized_data_uri_html_is_rejected_after_decoding():
+    import base64
+
+    from src.services.receipt_files import UnsafeReceiptError
+
+    html = "<p>Receipt subtotal EUR 12.34</p><!--" + "x" * 100_100 + "--><p>Total EUR 99.95</p>"
+    encoded = "data:text/html;base64," + base64.b64encode(html.encode()).decode()
+    with pytest.raises(UnsafeReceiptError, match="email_html_size_limit"):
+        email_intake.body_text({"html": encoded})
+
+
+@pytest.mark.asyncio
+async def test_empty_markup_does_not_block_real_attachment(db):
+    provider = OneReceiptEmail(plain=" \n", html='<img src="cid:receipt">', inline=True)
+    await email_intake.poll_once(provider)
+    async with db() as session:
+        message = (await session.execute(select(IncomingMessage))).scalar_one()
+        assert message.status == "staged"
+        candidate = (await session.execute(select(ReceiptCandidate))).scalar_one()
+        assert candidate.mime_type == "image/jpeg" and candidate.status == "needs_review"
+
+
+def test_whitespace_plain_body_uses_complete_html_alternative():
+    assert "Total EUR 12.34" in email_intake.body_text(
+        {
+            "text": " \n",
+            "html": "<p>Receipt total</p><p>Total EUR 12.34</p>",
+        }
+    )

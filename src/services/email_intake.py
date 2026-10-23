@@ -116,7 +116,9 @@ class TextOnly(HTMLParser):
 
 def body_text(email):
     plain = email.get("text")
-    if plain:
+    if plain and len(plain) > 100_000:
+        raise UnsafeReceiptError("email_body_size_limit")
+    if plain and plain.strip():
         body = plain
     else:
         html = email.get("html") or ""
@@ -135,10 +137,14 @@ def body_text(email):
             except (ValueError, UnicodeError):
                 raise UnsafeReceiptError("invalid_html_encoding") from None
         parser = TextOnly()
-        parser.feed(html[:100_001])
+        if len(html) > 100_000:
+            raise UnsafeReceiptError("email_html_size_limit")
+        parser.feed(html)
         body = "".join(parser.parts)
-    if not body.strip() or len(body) > 100_000:
-        raise UnsafeReceiptError("missing_or_oversized_email_body")
+    if len(body) > 100_000:
+        raise UnsafeReceiptError("email_body_size_limit")
+    if not body.strip():
+        raise UnsafeReceiptError("missing_email_body")
     return body
 
 
@@ -311,7 +317,6 @@ async def stage_message(message_id, provider):
         if len(attachments) > settings.intake_max_attachments:
             raise UnsafeReceiptError("attachment_count_limit")
         if attachments:
-            # Attachments are primary evidence. Do not double-extract the matching body.
             for index, attachment in enumerate(attachments):
                 if attachment.get("size", 0) > settings.intake_max_attachment_bytes:
                     raise UnsafeReceiptError("attachment_size_limit")
@@ -332,16 +337,33 @@ async def stage_message(message_id, provider):
                     attachment.get("filename") or f"attachment-{index}",
                     snapshot.id,
                 )
-        else:
-            await register_source(
-                snapshot.owner_id,
-                "email",
-                snapshot.id + ":body",
-                body_text(email).encode(),
-                "text/plain",
-                "Email body",
-                snapshot.id,
-            )
+        # A body can contain the receipt even when an attachment is only an inline
+        # logo/signature. Preserve both evidence paths; acceptance serializes and
+        # checks body/attachment siblings to prevent silently counting them twice.
+        if email.get("text") or email.get("html"):
+            try:
+                body = body_text(email).encode()
+            except UnsafeReceiptError as exc:
+                # Empty markup (e.g. a cid image alone) has no textual evidence.
+                # Oversized content must still quarantine, even with attachments.
+                if str(exc) != "missing_email_body" or not attachments:
+                    raise
+                body = None
+            if body:
+                total += len(body)
+                if total > settings.intake_max_message_bytes:
+                    raise UnsafeReceiptError("message_size_limit")
+                await register_source(
+                    snapshot.owner_id,
+                    "email",
+                    snapshot.id + ":body",
+                    body,
+                    "text/plain",
+                    "Email body",
+                    snapshot.id,
+                )
+        elif not attachments:
+            raise UnsafeReceiptError("missing_email_evidence")
         async with async_session() as session:
             async with session.begin():
                 message = (

@@ -45,14 +45,18 @@ and owner-scoped PostgreSQL advisory lock cover expense insertion, source link a
 decision. Model/network work is outside that transaction. Leases recover after crashes.
 
 Supported: JPEG/PNG/WebP, one receipt across multiple PDF pages, and plain/sanitized
-HTML email bodies. Attachments take priority over matching body content. Several
-documents remain separate candidates and are checked for duplicates. Multiple purchases
+HTML email bodies. Nonempty body content is staged even when attachments include inline
+logos or signatures. Body and attachments remain separate review candidates. Once one
+is accepted, a body/attachment sibling from that email cannot create another expense
+without an explicit separate-purchase override, even if extracted merchant names differ.
+Several documents are also checked for content/image duplicates. Multiple purchases
 inside one document require manual review. No link, tracking pixel or remote HTML
 resource is fetched. Attached .eml, office files, archives, encrypted mail, password-
 protected PDFs and link-only receipts are unsupported and require review.
 
-Limits: 10 MB/file, 25 MB downloaded attachments/message, 10 attachments, 20 pages/PDF,
-25 megapixels/image and 100,000 body characters. Provider limits can be lower.
+Limits: 10 MB/file, 25 MB combined evidence/message, 10 attachments, 20 pages/PDF,
+25 megapixels/image and 100,000 body characters (including complete decoded HTML markup).
+Oversized HTML is rejected before sanitization, never sliced. Provider limits can be lower.
 Unsafe/over-limit input is quarantined, never silently truncated into a ledger entry.
 
 ClamAV must succeed before email/CLI extraction; missing/unavailable/signatures older
