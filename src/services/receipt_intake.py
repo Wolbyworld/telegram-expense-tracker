@@ -23,6 +23,7 @@ from src.services.image_enhance import enhance_receipt
 from src.services.receipt_files import (
     UnsafeReceiptError,
     content_hash,
+    prepared_email,
     prepared_images,
     safe_path,
     scan_file,
@@ -99,6 +100,7 @@ async def register_source(
                         "image/webp": ".webp",
                         "application/pdf": ".pdf",
                         "text/plain": ".txt",
+                        "message/rfc822": ".eml",
                     }.get(mime, ".bin"),
                 ),
                 status="queued",
@@ -110,6 +112,10 @@ async def register_source(
 
 def expense_data(parsed: dict, channel: str) -> ExpenseCreate:
     result = ReceiptParseResult.model_validate(parsed)
+    if not result.date:
+        raise ValueError("receipt_date_unverified")
+    if result.total_amount is None:
+        raise ValueError("purchase_amount_unverified")
     amount = Decimal(str(result.total_amount))
     if not amount.is_finite() or abs(amount) >= Decimal("10000000000"):
         raise ValueError("invalid_amount")
@@ -130,6 +136,22 @@ def expense_data(parsed: dict, channel: str) -> ExpenseCreate:
         source="image" if channel == "telegram" else channel,
         confidence=result.confidence,
     )
+
+
+def document_hashes(candidate):
+    hashes = {candidate.sha256}
+    evidence = (candidate.raw_response or {}).get("_mime_evidence", {})
+    if (
+        candidate.mime_type == "message/rfc822"
+        and evidence.get("version") == 1
+        and evidence.get("source_sha256") == candidate.sha256
+    ):
+        hashes.update(
+            value
+            for value in evidence.get("identity_hashes", [])[:10]
+            if isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value)
+        )
+    return hashes
 
 
 async def find_matches(session, candidate, data):
@@ -163,7 +185,7 @@ async def find_matches(session, candidate, data):
             != (peer.source_key == peer.message_id + ":body")
             and peer.status in {"committed", "linked_duplicate"}
         )
-        exact = candidate.sha256 == peer.sha256
+        exact = bool(document_hashes(candidate) & document_hashes(peer))
         visual = False
         if candidate.image_hash and peer.image_hash:
             try:
@@ -195,7 +217,7 @@ async def find_matches(session, candidate, data):
             candidate.duplicate_candidate_id = peer.id
             candidate.duplicate_expense_id = peer.expense_id
             candidate.duplicate_reason = (
-                "exact_file"
+                ("exact_file" if candidate.sha256 == peer.sha256 else "contained_file")
                 if exact
                 else "image"
                 if visual
@@ -218,10 +240,50 @@ async def find_matches(session, candidate, data):
         candidate.duplicate_reason = "existing_receipt"
 
 
+async def _extract_email(candidate, path):
+    async with prepared_email(path) as document:
+        images = []
+        seen = set()
+        identity = []
+        manifest = []
+        for part in document["parts"]:
+            await scan_file(part["path"])
+            manifest.append(
+                {key: part[key] for key in ("mime", "part", "sha256", "bytes", "inline")}
+            )
+            bearing = (
+                part["mime"] == "application/pdf" or not part["inline"] or not document["text"]
+            )
+            if bearing:
+                identity.append(part["sha256"])
+            if part["sha256"] in seen:
+                continue
+            seen.add(part["sha256"])
+            async with prepared_images(part["path"], part["mime"]) as pages:
+                images.extend(pages)
+            if len(images) > settings.intake_max_pdf_pages:
+                raise UnsafeReceiptError("mime_page_limit")
+            if sum(map(len, images)) > settings.intake_max_message_bytes:
+                raise UnsafeReceiptError("decoded_image_size_limit")
+        parsed, raw = await receipt_parser.parse_document(images=images, text=document["text"])
+        raw = dict(raw)
+        raw["_mime_evidence"] = {
+            "version": 1,
+            "source_sha256": candidate.sha256,
+            "identity_hashes": sorted(set(identity)),
+            "parts": manifest,
+        }
+        # An inline brand logo cannot become the visual identity of a body receipt.
+        image_hash = compute_image_hash(images[0]) if len(images) == 1 and identity else None
+        return parsed, raw, image_hash
+
+
 async def _extract(candidate):
     path = safe_path(candidate.receipt_path)
     if candidate.channel != "telegram":
         await scan_file(path)
+    if candidate.mime_type == "message/rfc822":
+        return await _extract_email(candidate, path)
     if candidate.mime_type == "text/plain":
         text_body = path.read_text(encoding="utf-8")
         parsed, raw = await receipt_parser.parse_document(text=text_body)
@@ -300,8 +362,12 @@ async def process_candidate(candidate_id: str, owner_id: int) -> ReceiptCandidat
         validation_error = None
         try:
             data = expense_data(parsed_dict, snapshot.channel)
-        except ValueError:
-            validation_error = "extraction_fields_need_review"
+        except ValueError as exc:
+            validation_error = (
+                str(exc)
+                if str(exc) in {"receipt_date_unverified", "purchase_amount_unverified"}
+                else "extraction_fields_need_review"
+            )
     except Exception as exc:
         async with async_session() as session:
             async with session.begin():
@@ -383,7 +449,7 @@ async def decide(
     override_reason: str = "",
 ) -> ReceiptCandidate:
     checked_owner(owner_id)
-    if action not in {"accept", "save_separate", "reject", "link", "retry"}:
+    if action not in {"accept", "save_separate", "reject", "link", "retry", "correct"}:
         raise ValueError("invalid_action")
     async with async_session() as session:
         async with session.begin():
@@ -406,11 +472,42 @@ async def decide(
                 raise ReviewConflictError("candidate_not_ready_for_review")
             details = {}
             if action == "retry":
+                details["previous_status"] = candidate.status
+                details["previous_error"] = candidate.error_code
                 candidate.status = "queued"
                 candidate.next_attempt_at = None
                 candidate.attempts = 0
             elif action == "reject":
                 candidate.status = "rejected"
+            elif action == "correct":
+                if candidate.status not in {"needs_review", "duplicate_candidate"}:
+                    raise ReviewConflictError("retry_and_validate_before_correcting")
+                allowed = {"vendor", "description", "category", "date", "total_amount", "currency"}
+                if not edits or set(edits) - allowed:
+                    raise ValueError("unsupported_or_empty_correction")
+                previous = dict(candidate.parsed or {})
+                corrected = {**previous, **edits}
+                if "date" in edits:
+                    corrected["date_evidence"] = None
+                value = ReceiptParseResult.model_validate(corrected)
+                candidate.parsed = value.model_dump(mode="json")
+                details["previous_fields"] = {key: previous.get(key) for key in edits}
+                details["edits"] = edits
+                details["reason"] = override_reason[:1000]
+                candidate.status = "needs_review"
+                try:
+                    data = expense_data(candidate.parsed, candidate.channel)
+                except ValueError as exc:
+                    candidate.error_code = (
+                        str(exc)
+                        if str(exc) in {"receipt_date_unverified", "purchase_amount_unverified"}
+                        else "extraction_fields_need_review"
+                    )
+                else:
+                    candidate.error_code = None
+                    await find_matches(session, candidate, data)
+                    if candidate.duplicate_reason:
+                        candidate.status = "duplicate_candidate"
             elif action == "link":
                 expense = (
                     await session.execute(

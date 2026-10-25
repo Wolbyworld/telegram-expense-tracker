@@ -825,3 +825,417 @@ def test_whitespace_plain_body_uses_complete_html_alternative():
             "html": "<p>Receipt total</p><p>Total EUR 12.34</p>",
         }
     )
+
+
+class NativeReceiving:
+    def __init__(self, blob, authentication=None):
+        self.blob = blob
+        self.authentication = authentication or {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
+        self.downloads = 0
+
+    async def get(self, path, params=None):
+        metadata = {
+            "id": "native",
+            "from": "owner@example.com",
+            "to": [settings.email_intake_address],
+        }
+        if path == "/emails/receiving":
+            return {"data": [metadata], "has_more": False}
+        if path.endswith("/attachments/original"):
+            return {"download_url": "https://cdn.resend.app/native"}
+        return {
+            **metadata,
+            "text": "",
+            "html": "",
+            "authentication": self.authentication,
+            "attachments": [
+                {
+                    "id": "original",
+                    "filename": "receipt.eml",
+                    "content_type": "message/rfc822",
+                    "size": len(self.blob),
+                }
+            ],
+        }
+
+    async def download(self, url):
+        self.downloads += 1
+        return self.blob
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["plain", "html", "pdf", "inline"])
+async def test_native_forward_existing_pipeline_one_document_review_replay(
+    db, monkeypatch, native_receipt, variant
+):
+    from unittest.mock import AsyncMock
+
+    blob, files = native_receipt(
+        html=variant != "plain",
+        blank_plain=variant == "html",
+        pdf=variant == "pdf",
+        image=variant == "inline",
+        inline=variant == "inline",
+        nested=1,
+    )
+    provider = NativeReceiving(blob)
+    scan = AsyncMock()
+    model = AsyncMock(return_value=(parsed(), parsed().model_dump(mode="json")))
+    monkeypatch.setattr(receipt_intake, "scan_file", scan)
+    monkeypatch.setattr(receipt_intake.receipt_parser, "parse_document", model)
+    monkeypatch.setattr(receipt_intake, "_extract", REAL_EXTRACT)
+    await email_intake.poll_once(provider)
+    await email_intake.poll_once(provider)
+    async with db() as session:
+        candidates = (await session.execute(select(ReceiptCandidate))).scalars().all()
+        assert len(candidates) == 1
+        candidate = candidates[0]
+        assert candidate.owner_id == 101 and candidate.status == "needs_review"
+        assert candidate.mime_type == "message/rfc822"
+        assert candidate.raw_response["_mime_evidence"]["source_sha256"] == candidate.sha256
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+    assert provider.downloads == 1 and model.await_count == 1
+    supplied = model.call_args.kwargs
+    assert "Total EUR 12.34" in supplied["text"]
+    assert "forged.example" not in supplied["text"]
+    assert len(supplied["images"]) == len(files)
+    assert scan.await_count == 1 + len(files)
+    if variant == "inline":
+        assert candidate.image_hash is None
+        assert candidate.raw_response["_mime_evidence"]["identity_hashes"] == []
+
+
+@pytest.mark.asyncio
+async def test_nested_pdf_exact_file_matches_cli_even_when_extraction_differs(
+    db, monkeypatch, native_receipt
+):
+    from unittest.mock import AsyncMock
+
+    blob, files = native_receipt(pdf=True, nested=1)
+    monkeypatch.setattr(receipt_intake, "scan_file", AsyncMock())
+    monkeypatch.setattr(
+        receipt_intake.receipt_parser,
+        "parse_document",
+        AsyncMock(return_value=(parsed(), parsed().model_dump(mode="json"))),
+    )
+
+    async def extract(candidate):
+        if candidate.mime_type == "message/rfc822":
+            return await REAL_EXTRACT(candidate)
+        value = parsed().model_copy(update={"vendor": "Different OCR"})
+        return value, value.model_dump(mode="json"), None
+
+    monkeypatch.setattr(receipt_intake, "_extract", extract)
+    await email_intake.poll_once(NativeReceiving(blob))
+    cli = await receipt_intake.register_source(
+        101, "cli", "same-pdf", files[0][1], "application/pdf"
+    )
+    processed = await receipt_intake.process_candidate(cli.id, 101)
+    assert processed.status == "duplicate_candidate"
+    assert processed.duplicate_reason == "contained_file"
+    held = await receipt_intake.decide(cli.id, 101, "accept", "test")
+    assert held.expense_id is None and held.status == "duplicate_candidate"
+    async with db() as session:
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+
+
+@pytest.mark.asyncio
+async def test_forged_inner_auth_never_overrides_failed_outer_auth(db, monkeypatch, native_receipt):
+    from unittest.mock import AsyncMock
+
+    blob, _ = native_receipt(nested=1)
+    extract = AsyncMock()
+    monkeypatch.setattr(receipt_intake, "_extract", extract)
+    provider = NativeReceiving(blob, {"spf": "processing_failed", "dkim": "gray", "dmarc": "fail"})
+    await email_intake.poll_once(provider)
+    assert provider.downloads == 0 and extract.await_count == 0
+    async with db() as session:
+        message = (await session.execute(select(IncomingMessage))).scalar_one()
+        assert message.status == "quarantined"
+        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 0
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+
+
+@pytest.mark.asyncio
+async def test_one_denied_attachment_does_not_block_other_messages_and_respects_backoff(db):
+    class Mixed(FakeReceiving):
+        def __init__(self):
+            self.denied_downloads = 0
+
+        async def get(self, path, params=None):
+            if path == "/emails/receiving":
+                return {
+                    "has_more": False,
+                    "data": [
+                        {
+                            "id": key,
+                            "from": "owner@example.com",
+                            "to": [settings.email_intake_address],
+                        }
+                        for key in ("denied", "good")
+                    ],
+                }
+            if "/attachments/" in path:
+                return {"download_url": "https://cdn.resend.app/denied"}
+            return {
+                "from": "owner@example.com",
+                "to": [settings.email_intake_address],
+                "authentication": {"dmarc": "pass"},
+                "text": "Synthetic total EUR 12.34",
+                "attachments": [{"id": "one", "content_type": "image/png"}]
+                if path.endswith("denied")
+                else [],
+            }
+
+        async def download(self, url):
+            self.denied_downloads += 1
+            raise email_intake.ReceivingError("attachment_http_403")
+
+    provider = Mixed()
+    await email_intake.poll_once(provider)
+    await email_intake.poll_once(provider)
+    assert provider.denied_downloads == 1
+    async with db() as session:
+        messages = (await session.execute(select(IncomingMessage))).scalars().all()
+        assert {m.external_id: m.status for m in messages} == {"denied": "retry", "good": "staged"}
+        poll = (await session.execute(select(IntakePollState))).scalar_one()
+        assert poll.last_success_at and poll.scanned_messages == 2
+        assert poll.last_error == "messages_retrying_or_failed"
+        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 403])
+async def test_signed_download_keeps_exact_provider_query_and_never_bypasses_denial(
+    monkeypatch, status
+):
+    from urllib.parse import urlsplit
+
+    original = (
+        "https://cdn.resend.app/a?response-content-disposition=attachment%3B%20"
+        "filename%3D%22Lime%2Freceipt%20%231.eml%22&Signature=fake%2Bsignature"
+    )
+    calls = []
+
+    class Context:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+    class Response(Context):
+        def __init__(self):
+            self.status = status
+            self.content = self
+
+        async def iter_chunked(self, size):
+            yield b"synthetic bytes"
+
+    class Session(Context):
+        def __init__(self, **kwargs):
+            pass
+
+        def get(self, url, **kwargs):
+            calls.append(url)
+            assert url.raw_query_string == urlsplit(original).query
+            assert str(url) == original
+            assert kwargs == {"allow_redirects": False}
+            return Response()
+
+    monkeypatch.setattr(email_intake.aiohttp, "TCPConnector", lambda **kwargs: object())
+    monkeypatch.setattr(email_intake.aiohttp, "ClientSession", Session)
+    provider = email_intake.ResendReceiving("synthetic-key")
+    if status == 403:
+        with pytest.raises(email_intake.ReceivingError, match="attachment_http_403"):
+            await provider.download(original)
+    else:
+        assert await provider.download(original) == b"synthetic bytes"
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_future_retries_do_not_starve_new_mail_at_batch_limit(db):
+    async with db() as session:
+        for index in range(101):
+            session.add(
+                IncomingMessage(
+                    id=uuid.uuid4().hex,
+                    provider="resend",
+                    account=settings.email_intake_account,
+                    external_id="future-" + str(index),
+                    owner_id=101,
+                    sender="owner@example.com",
+                    recipient=settings.email_intake_address,
+                    status="retry",
+                    attempts=1,
+                    next_attempt_at=receipt_intake.now() + timedelta(days=1),
+                )
+            )
+        await session.commit()
+    await email_intake.poll_once(FakeReceiving())
+    async with db() as session:
+        good = (
+            await session.execute(
+                select(IncomingMessage).where(IncomingMessage.external_id == "mail-1")
+            )
+        ).scalar_one()
+        assert good.status == "staged"
+        assert await session.scalar(select(func.count()).select_from(ReceiptCandidate)) == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_preserves_quarantine_reason_in_audit(db):
+    candidate = await stage("preserved-original")
+    async with db() as session:
+        row = await session.get(ReceiptCandidate, candidate.id)
+        row.status = "quarantined"
+        row.error_code = "decoder_rejected"
+        await session.commit()
+    await receipt_intake.decide(candidate.id, 101, "retry", "operator")
+    async with db() as session:
+        decision = (await session.execute(select(IntakeDecision))).scalar_one()
+        assert decision.details["previous_status"] == "quarantined"
+        assert decision.details["previous_error"] == "decoder_rejected"
+        assert (
+            await session.get(ReceiptCandidate, candidate.id)
+        ).receipt_path == candidate.receipt_path
+
+
+@pytest.mark.asyncio
+async def test_failed_outer_auth_is_retained_without_download(db, native_receipt):
+    blob, _ = native_receipt(html=True)
+    auth = {"spf": "processing_failed", "dkim": "gray", "dmarc": "fail"}
+    provider = NativeReceiving(blob, auth)
+    await email_intake.poll_once(provider)
+    async with db() as session:
+        row = (await session.execute(select(IncomingMessage))).scalar_one()
+        assert row.authentication == auth and row.status == "quarantined"
+    assert provider.downloads == 0
+
+
+@pytest.mark.asyncio
+async def test_native_mime_page_budget_applies_across_attachments(db, monkeypatch, native_receipt):
+    from unittest.mock import AsyncMock
+
+    blob, _ = native_receipt(pdf=True, image=True)
+    monkeypatch.setattr(receipt_intake, "scan_file", AsyncMock())
+    model = AsyncMock()
+    monkeypatch.setattr(receipt_intake.receipt_parser, "parse_document", model)
+    monkeypatch.setattr(receipt_intake, "_extract", REAL_EXTRACT)
+    monkeypatch.setattr(settings, "intake_max_pdf_pages", 1)
+    await email_intake.poll_once(NativeReceiving(blob))
+    async with db() as session:
+        row = (await session.execute(select(ReceiptCandidate))).scalar_one()
+        assert row.status == "quarantined" and row.error_code == "mime_page_limit"
+    assert model.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_shared_inline_logo_does_not_identify_unrelated_body_receipts(
+    db, monkeypatch, native_receipt
+):
+    from unittest.mock import AsyncMock
+
+    first_blob, _ = native_receipt(image=True, inline=True)
+    second_blob = first_blob.replace(b"TEST ONLY", b"SECOND TEST")
+    first_value = parsed()
+    second_value = parsed().model_copy(update={"vendor": "Different Shop", "total_amount": 28.50})
+    monkeypatch.setattr(receipt_intake, "scan_file", AsyncMock())
+    monkeypatch.setattr(receipt_intake, "_extract", REAL_EXTRACT)
+    monkeypatch.setattr(
+        receipt_intake.receipt_parser,
+        "parse_document",
+        AsyncMock(
+            side_effect=[
+                (first_value, first_value.model_dump(mode="json")),
+                (second_value, second_value.model_dump(mode="json")),
+            ]
+        ),
+    )
+    for key, blob in [("logo-one", first_blob), ("logo-two", second_blob)]:
+        row = await receipt_intake.register_source(101, "cli", key, blob, "message/rfc822")
+        candidate = await receipt_intake.process_candidate(row.id, 101)
+        assert candidate.status == "needs_review"
+        assert candidate.image_hash is None and candidate.duplicate_reason is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("credentials", [False, True])
+async def test_global_rate_limit_or_credentials_still_stops_poll(db, credentials):
+    class GlobalFailure(FakeReceiving):
+        async def get(self, path, params=None):
+            if path == "/emails/receiving":
+                return {
+                    "has_more": False,
+                    "data": [
+                        {
+                            "id": key,
+                            "from": "owner@example.com",
+                            "to": [settings.email_intake_address],
+                        }
+                        for key in ["first", "second"]
+                    ],
+                }
+            if credentials:
+                raise email_intake.ReceivingCredentialsError(
+                    "receiving_key_missing_or_insufficient_scope"
+                )
+            raise email_intake.ReceivingError("provider_http_429", retry_after=600)
+
+    error = email_intake.ReceivingCredentialsError if credentials else email_intake.ReceivingError
+    started = receipt_intake.now()
+    with pytest.raises(error):
+        await email_intake.poll_once(GlobalFailure())
+    async with db() as session:
+        rows = (
+            (await session.execute(select(IncomingMessage).order_by(IncomingMessage.created_at)))
+            .scalars()
+            .all()
+        )
+        assert rows[0].status == "retry" and rows[1].status == "received"
+        if not credentials:
+            assert rows[0].next_attempt_at >= started + timedelta(seconds=600)
+        poll = await session.get(IntakePollState, settings.email_intake_account)
+        assert poll.last_success_at is None
+        assert poll.scanned_messages == 2
+
+
+@pytest.mark.asyncio
+async def test_correction_clears_unsupported_date_without_booking_or_evidence_change(db):
+    row = await stage("unknown-date")
+    original_path, original_sha = row.receipt_path, row.sha256
+    corrected = await receipt_intake.decide(
+        row.id,
+        101,
+        "correct",
+        "operator",
+        edits={"date": None},
+        override_reason="No receipt date in source",
+    )
+    assert corrected.parsed["date"] is None
+    assert corrected.error_code == "receipt_date_unverified"
+    assert corrected.status == "needs_review" and corrected.expense_id is None
+    with pytest.raises(ValueError, match="receipt_date_unverified"):
+        await receipt_intake.decide(row.id, 101, "accept", "operator")
+    async with db() as session:
+        saved = await session.get(ReceiptCandidate, row.id)
+        assert saved.receipt_path == original_path and saved.sha256 == original_sha
+        assert saved.raw_response["date"] == "2026-10-23"
+        decision = (await session.execute(select(IntakeDecision))).scalar_one()
+        assert decision.action == "correct"
+        assert decision.details["previous_fields"]["date"] == "2026-10-23"
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+
+
+@pytest.mark.asyncio
+async def test_correction_cannot_release_quarantined_source(db):
+    row = await stage("unsafe-for-correction")
+    async with db() as session:
+        saved = await session.get(ReceiptCandidate, row.id)
+        saved.status = "quarantined"
+        await session.commit()
+    with pytest.raises(receipt_intake.ReviewConflictError):
+        await receipt_intake.decide(
+            row.id, 101, "correct", "operator", edits={"date": "2026-10-23"}
+        )

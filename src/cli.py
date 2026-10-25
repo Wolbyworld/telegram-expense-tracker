@@ -55,7 +55,9 @@ def parser():
     review.add_argument("id")
     review.add_argument("--owner", required=True, type=int)
     review.add_argument(
-        "--action", required=True, choices=["accept", "save_separate", "link", "reject", "retry"]
+        "--action",
+        required=True,
+        choices=["accept", "save_separate", "link", "reject", "retry", "correct"],
     )
     review.add_argument("--actor", required=True)
     review.add_argument("--expense-id", type=int)

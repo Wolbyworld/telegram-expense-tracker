@@ -28,8 +28,11 @@ class ReceiptParseResult(BaseModel):
     """Schema matching GPT-5.4-mini structured output for receipt extraction."""
 
     vendor: str | None = None
-    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
-    total_amount: float
+    date: str | None = Field(description="ISO 8601 date (YYYY-MM-DD), null if unverified")
+    date_evidence: str | None = None
+    total_amount: float | None
+    amount_evidence: str | None = None
+    amount_basis: str | None = None
     currency: str = Field(min_length=3, max_length=3)
     category: ExpenseCategory
     description: str | None = None

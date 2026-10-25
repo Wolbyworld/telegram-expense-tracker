@@ -109,6 +109,7 @@ async def evidence(candidate_id: str, db: AsyncSession = Depends(get_db)):
             "image/webp": ".webp",
             "application/pdf": ".pdf",
             "text/plain": ".txt",
+            "message/rfc822": ".eml",
         }.get(row.mime_type, ".bin"),
         content_disposition_type="attachment",
     )
@@ -145,6 +146,11 @@ async def review(
     ):
         if value.strip():
             edits[key] = value.strip()
+    if action == "correct":
+        if not receipt_date.strip():
+            edits["date"] = None
+        if not amount.strip():
+            edits["total_amount"] = None
     try:
         await decide(
             candidate_id,

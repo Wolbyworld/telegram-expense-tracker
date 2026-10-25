@@ -43,24 +43,38 @@ produce duplicate review candidates across channels. Exact-file history includes
 deleted provenance; replay does not silently recreate a deleted expense. A transaction
 and owner-scoped PostgreSQL advisory lock cover expense insertion, source link and
 decision. Model/network work is outside that transaction. Leases recover after crashes.
+Nested receipt-file hashes supplement whole-original hashes; inline brand logos do
+not become the identity of a body receipt. Retry audit records retain the previous
+quarantine status/error while preserving the original file and older attempts.
 
 Supported: JPEG/PNG/WebP, one receipt across multiple PDF pages, and plain/sanitized
-HTML email bodies. Nonempty body content is staged even when attachments include inline
+HTML email bodies, and bounded attached original emails (.eml / message/rfc822).
+One original is one receipt document: its body, PDF and images are extracted together
+into one reviewed purchase. Inner From/Authentication-Results headers never grant
+ownership or override provider-computed authentication of the outer email.
+Nonempty body content is staged even when attachments include inline
 logos or signatures. Body and attachments remain separate review candidates. Once one
 is accepted, a body/attachment sibling from that email cannot create another expense
 without an explicit separate-purchase override, even if extracted merchant names differ.
 Several documents are also checked for content/image duplicates. Multiple purchases
 inside one document require manual review. No link, tracking pixel or remote HTML
-resource is fetched. Attached .eml, office files, archives, encrypted mail, password-
+resource is fetched. Office files, archives, encrypted mail, password-
 protected PDFs and link-only receipts are unsupported and require review.
 
 Limits: 10 MB/file, 25 MB combined evidence/message, 10 attachments, 20 pages/PDF,
 25 megapixels/image and 100,000 body characters (including complete decoded HTML markup).
 Oversized HTML is rejected before sanitization, never sliced. Provider limits can be lower.
+Nested originals also have a depth limit of 8 and 50 MIME parts; aggregate decoded
+bytes, attachments and pages share the same message limits. MIME parsing runs in the
+existing unprivileged, resource-limited, network-denied decoder. Unknown/encrypted
+containers and malformed/unsupported parts quarantine the complete original.
 Unsafe/over-limit input is quarantined, never silently truncated into a ledger entry.
 Attachment URLs from the authenticated Resend API may use the exact provider host
 cdn.resend.app. Other account-controlled resend.app hosts are rejected; HTTPS,
-public-address resolution, byte limits and the no-redirect rule still apply.
+public-address resolution, byte limits and the no-redirect rule still apply. Provider
+signed URLs are sent byte-for-byte using encoded=True: URL requoting can otherwise
+invalidate CloudFront signatures. An actual 403 still fails closed; no alternate
+host, credential or signature is substituted.
 
 ClamAV must succeed before email/CLI extraction; missing/unavailable/signatures older
 than seven days fail closed. The image obtains signatures at build time. When receiving
@@ -89,6 +103,14 @@ Run inside the existing protected application environment. Commands do not send 
     python -m src.cli review CANDIDATE_ID --owner OWNER_ID --actor operator --action retry
     python -m src.cli poll-once
     python -m src.cli retry-conversion EXPENSE_ID --owner OWNER_ID
+
+Message failures have individual durable retry/backoff states and do not stop other
+due messages; new mail is prioritized ahead of repeated retries. API credential
+failures still halt intake, and API rate-limit Retry-After pauses the whole poller.
+Poll health distinguishes a completed reconciliation from messages still retrying.
+A staged .eml candidate previously quarantined by the decoder can be retried through
+the ordinary review/CLI candidate action. Failed download messages use retry-message.
+Do not retry auth-failed messages under a relaxed policy.
 
 An edits JSON file may correct vendor, description, category, date, total_amount and
 currency. CLI import defaults to a SHA-256 source identity; --source-key is for a stable

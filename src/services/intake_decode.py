@@ -8,6 +8,8 @@ import sys
 import warnings
 from pathlib import Path
 
+from src.services.intake_errors import UnsafeReceiptError
+
 
 def restrict_linux_syscalls():
     """Deny network, subprocess execution and ptrace in the decoder only."""
@@ -58,6 +60,19 @@ def restrict_linux_syscalls():
 
 
 def decode(source: Path, destination: Path, mime: str, pixels: int, pages: int):
+    if mime == "message/rfc822":
+        from src.services.mime_decode import unpack
+
+        restrict_linux_syscalls()
+        return unpack(
+            source,
+            destination,
+            {
+                "file_bytes": int(sys.argv[6]),
+                "message_bytes": int(sys.argv[7]),
+                "files": int(sys.argv[8]),
+            },
+        )
     from PIL import Image, ImageOps
 
     if mime == "application/pdf":
@@ -123,5 +138,9 @@ if __name__ == "__main__":
             )
         )
     except Exception as exc:
-        print(json.dumps({"error": type(exc).__name__}))
+        print(
+            json.dumps(
+                {"error": str(exc) if isinstance(exc, UnsafeReceiptError) else type(exc).__name__}
+            )
+        )
         sys.exit(1)
