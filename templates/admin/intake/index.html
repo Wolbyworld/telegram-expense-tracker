@@ -28,13 +28,15 @@
       <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <label class="text-sm">Vendor<input class="block rounded w-full" name="vendor" value="{{ fields.get('vendor') or '' }}"></label>
         <label class="text-sm">Receipt date<input class="block rounded w-full" name="receipt_date" type="date" value="{{ fields.get('date') or '' }}"></label>
-        <label class="text-sm">Amount<input class="block rounded w-full" name="amount" inputmode="decimal" value="{{ fields.get('total_amount', '') }}"></label>
+        <label class="text-sm">Amount<input class="block rounded w-full" name="amount" inputmode="decimal" value="{{ fields.get('total_amount') if fields.get('total_amount') is not none else '' }}"></label>
         <label class="text-sm">Currency<input class="block rounded w-full" name="currency" maxlength="3" value="{{ fields.get('currency') or '' }}"></label>
       </div>
       {% if fields %}<p class="text-sm text-slate-600">{{ fields.get('description') or '' }} · Confidence {{ ((fields.get('confidence') or 0) * 100)|round|int }}%</p>{% endif %}
       <p class="text-sm text-slate-500">New expenses default to Company. You can change the classification on the expense afterward.</p>
       <div class="flex flex-wrap gap-3">
         {% if row.status in ['needs_review', 'duplicate_candidate'] %}
+        <button class="bg-slate-100 rounded-lg px-4 py-2" name="action" value="correct">Save corrections only</button>
+        <span class="text-sm text-slate-500">Leave an unverified date or amount blank and save corrections; accepting requires complete fields.</span>
         <button class="bg-teal-700 text-white rounded-lg px-4 py-2" name="action" value="accept">Accept</button>
         <input class="rounded" name="expense_id" type="number" placeholder="Existing expense ID" value="{{ row.duplicate_expense_id or '' }}">
         <button class="bg-slate-100 rounded-lg px-4 py-2" name="action" value="link">Link to existing</button>

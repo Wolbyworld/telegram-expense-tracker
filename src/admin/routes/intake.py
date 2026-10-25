@@ -146,6 +146,11 @@ async def review(
     ):
         if value.strip():
             edits[key] = value.strip()
+    if action == "correct":
+        if not receipt_date.strip():
+            edits["date"] = None
+        if not amount.strip():
+            edits["total_amount"] = None
     try:
         await decide(
             candidate_id,

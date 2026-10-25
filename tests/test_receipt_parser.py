@@ -82,3 +82,44 @@ def test_parse_multi_currency_receipt():
     assert result.currency == "USD"
     assert result.tip_amount == 8.00
     assert result.location_country == "US"
+
+
+def test_document_date_requires_literal_complete_unambiguous_evidence():
+    from src.services.receipt_parser import supported_text_date
+
+    assert supported_text_date("2026-10-21", "October 21, 2026", "Delivered on October 21, 2026")
+    assert supported_text_date("2026-10-21", "10/21/2026", "Receipt 10/21/2026")
+    assert not supported_text_date("2026-01-01", None, "Order total $40.12")
+    assert not supported_text_date("2026-10-21", "October 21", "Delivered on October 21")
+    assert not supported_text_date("2026-03-04", "03/04/2026", "Receipt 03/04/2026")
+    assert not supported_text_date("2026-10-21", "October 21, 2026", "No receipt date")
+
+
+async def test_document_unknown_date_and_balance_due_do_not_appear_verified(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from src.services import receipt_parser
+
+    raw = {
+        "vendor": "Car Rental",
+        "date": "2026-01-01",
+        "date_evidence": None,
+        "total_amount": 0,
+        "amount_evidence": "Amount due $0.00",
+        "amount_basis": "balance_due",
+        "currency": "USD",
+        "category": "Transport",
+        "confidence": 0.99,
+    }
+    response = AsyncMock(return_value=SimpleNamespace(output_text=json.dumps(raw)))
+    monkeypatch.setattr(receipt_parser.client.responses, "create", response)
+    parsed, evidence = await receipt_parser.parse_document(text="Amount due $0.00 after payment")
+    assert parsed.date is None and parsed.total_amount is None
+    assert "unverified" in parsed.description and parsed.confidence <= 0.5
+    kwargs = response.call_args.kwargs
+    schema = kwargs["text"]["format"]["schema"]
+    assert schema["properties"]["date"]["type"] == ["string", "null"]
+    assert schema["properties"]["total_amount"]["type"] == ["number", "null"]
+    assert receipt_parser.RECEIPT_JSON_SCHEMA["properties"]["date"]["type"] == "string"

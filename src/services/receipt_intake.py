@@ -112,6 +112,10 @@ async def register_source(
 
 def expense_data(parsed: dict, channel: str) -> ExpenseCreate:
     result = ReceiptParseResult.model_validate(parsed)
+    if not result.date:
+        raise ValueError("receipt_date_unverified")
+    if result.total_amount is None:
+        raise ValueError("purchase_amount_unverified")
     amount = Decimal(str(result.total_amount))
     if not amount.is_finite() or abs(amount) >= Decimal("10000000000"):
         raise ValueError("invalid_amount")
@@ -358,8 +362,12 @@ async def process_candidate(candidate_id: str, owner_id: int) -> ReceiptCandidat
         validation_error = None
         try:
             data = expense_data(parsed_dict, snapshot.channel)
-        except ValueError:
-            validation_error = "extraction_fields_need_review"
+        except ValueError as exc:
+            validation_error = (
+                str(exc)
+                if str(exc) in {"receipt_date_unverified", "purchase_amount_unverified"}
+                else "extraction_fields_need_review"
+            )
     except Exception as exc:
         async with async_session() as session:
             async with session.begin():
@@ -441,7 +449,7 @@ async def decide(
     override_reason: str = "",
 ) -> ReceiptCandidate:
     checked_owner(owner_id)
-    if action not in {"accept", "save_separate", "reject", "link", "retry"}:
+    if action not in {"accept", "save_separate", "reject", "link", "retry", "correct"}:
         raise ValueError("invalid_action")
     async with async_session() as session:
         async with session.begin():
@@ -471,6 +479,35 @@ async def decide(
                 candidate.attempts = 0
             elif action == "reject":
                 candidate.status = "rejected"
+            elif action == "correct":
+                if candidate.status not in {"needs_review", "duplicate_candidate"}:
+                    raise ReviewConflictError("retry_and_validate_before_correcting")
+                allowed = {"vendor", "description", "category", "date", "total_amount", "currency"}
+                if not edits or set(edits) - allowed:
+                    raise ValueError("unsupported_or_empty_correction")
+                previous = dict(candidate.parsed or {})
+                corrected = {**previous, **edits}
+                if "date" in edits:
+                    corrected["date_evidence"] = None
+                value = ReceiptParseResult.model_validate(corrected)
+                candidate.parsed = value.model_dump(mode="json")
+                details["previous_fields"] = {key: previous.get(key) for key in edits}
+                details["edits"] = edits
+                details["reason"] = override_reason[:1000]
+                candidate.status = "needs_review"
+                try:
+                    data = expense_data(candidate.parsed, candidate.channel)
+                except ValueError as exc:
+                    candidate.error_code = (
+                        str(exc)
+                        if str(exc) in {"receipt_date_unverified", "purchase_amount_unverified"}
+                        else "extraction_fields_need_review"
+                    )
+                else:
+                    candidate.error_code = None
+                    await find_matches(session, candidate, data)
+                    if candidate.duplicate_reason:
+                        candidate.status = "duplicate_candidate"
             elif action == "link":
                 expense = (
                     await session.execute(

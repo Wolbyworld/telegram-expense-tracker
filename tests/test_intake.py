@@ -1199,3 +1199,43 @@ async def test_global_rate_limit_or_credentials_still_stops_poll(db, credentials
         poll = await session.get(IntakePollState, settings.email_intake_account)
         assert poll.last_success_at is None
         assert poll.scanned_messages == 2
+
+
+@pytest.mark.asyncio
+async def test_correction_clears_unsupported_date_without_booking_or_evidence_change(db):
+    row = await stage("unknown-date")
+    original_path, original_sha = row.receipt_path, row.sha256
+    corrected = await receipt_intake.decide(
+        row.id,
+        101,
+        "correct",
+        "operator",
+        edits={"date": None},
+        override_reason="No receipt date in source",
+    )
+    assert corrected.parsed["date"] is None
+    assert corrected.error_code == "receipt_date_unverified"
+    assert corrected.status == "needs_review" and corrected.expense_id is None
+    with pytest.raises(ValueError, match="receipt_date_unverified"):
+        await receipt_intake.decide(row.id, 101, "accept", "operator")
+    async with db() as session:
+        saved = await session.get(ReceiptCandidate, row.id)
+        assert saved.receipt_path == original_path and saved.sha256 == original_sha
+        assert saved.raw_response["date"] == "2026-10-23"
+        decision = (await session.execute(select(IntakeDecision))).scalar_one()
+        assert decision.action == "correct"
+        assert decision.details["previous_fields"]["date"] == "2026-10-23"
+        assert await session.scalar(select(func.count()).select_from(Expense)) == 0
+
+
+@pytest.mark.asyncio
+async def test_correction_cannot_release_quarantined_source(db):
+    row = await stage("unsafe-for-correction")
+    async with db() as session:
+        saved = await session.get(ReceiptCandidate, row.id)
+        saved.status = "quarantined"
+        await session.commit()
+    with pytest.raises(receipt_intake.ReviewConflictError):
+        await receipt_intake.decide(
+            row.id, 101, "correct", "operator", edits={"date": "2026-10-23"}
+        )
