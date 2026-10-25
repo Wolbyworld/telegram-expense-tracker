@@ -1,0 +1,52 @@
+{% extends "admin/base.html" %}
+{% block title %}Receipt inbox · Expense Tracker{% endblock %}
+{% block content %}
+<div class="p-8 space-y-6">
+  <div><h1 class="text-3xl font-bold">Receipt inbox</h1>
+    <p class="text-slate-600 mt-2">Review forwarded receipts before they enter your expenses.</p></div>
+  <p class="text-sm text-slate-600">Email receiving: {{ 'enabled' if receiving_enabled else 'not activated' }}.
+    {% if poll and poll.last_success_at %} Last successful poll: {{ poll.last_success_at }} UTC.{% endif %}
+    {% if poll and poll.last_error %} Poll needs attention: {{ poll.last_error }}.{% endif %}</p>
+  {% if messages %}<section class="bg-amber-50 rounded-xl p-4"><h2 class="font-bold">Messages needing attention</h2>
+    {% for message in messages %}<p class="text-sm mt-2">{{ message.created_at }} · {{ message.sender }} · {{ message.status }} · {{ message.error_code }} · {{ message.id[:8] }}</p>{% endfor %}
+  </section>{% endif %}
+  {% for row in candidates %}
+  <article class="bg-white rounded-xl p-6 shadow-ambient space-y-4">
+    <div class="flex justify-between gap-4"><div><h2 class="font-bold text-lg">{{ row.filename }}</h2>
+      <p class="text-sm text-slate-500">{{ row.channel }} · {{ row.created_at.strftime('%d %b %Y %H:%M') }} · {{ row.id[:8] }}</p></div>
+      <span class="text-sm font-semibold">{{ row.status.replace('_', ' ') }}</span></div>
+    {% if row.expense_id %}<a class="text-teal-700 underline" href="/admin/expenses/{{ row.expense_id }}">Expense #{{ row.expense_id }}</a>{% endif %}
+    {% if row.duplicate_reason %}<p class="bg-amber-50 rounded-lg p-3">Possible duplicate: {{ row.duplicate_reason }}.
+      {% if row.duplicate_expense_id %}<a class="underline" href="/admin/expenses/{{ row.duplicate_expense_id }}">Compare expense #{{ row.duplicate_expense_id }}</a>{% endif %}
+      {% if row.duplicate_candidate_id %} Related candidate: {{ row.duplicate_candidate_id[:8] }}.{% endif %}</p>{% endif %}
+    {% if row.error_code %}<p class="text-amber-800">Needs attention: {{ row.error_code }}</p>{% endif %}
+    <a class="text-teal-700 underline text-sm" href="/admin/intake/{{ row.id }}/file">Download original evidence</a>
+    {% if row.status not in ['committed', 'linked_duplicate', 'rejected', 'processing', 'queued', 'retry'] %}
+    <form method="post" action="/admin/intake/{{ row.id }}" class="space-y-3">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% set fields = row.parsed or {} %}
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <label class="text-sm">Vendor<input class="block rounded w-full" name="vendor" value="{{ fields.get('vendor') or '' }}"></label>
+        <label class="text-sm">Receipt date<input class="block rounded w-full" name="receipt_date" type="date" value="{{ fields.get('date') or '' }}"></label>
+        <label class="text-sm">Amount<input class="block rounded w-full" name="amount" inputmode="decimal" value="{{ fields.get('total_amount', '') }}"></label>
+        <label class="text-sm">Currency<input class="block rounded w-full" name="currency" maxlength="3" value="{{ fields.get('currency') or '' }}"></label>
+      </div>
+      {% if fields %}<p class="text-sm text-slate-600">{{ fields.get('description') or '' }} · Confidence {{ ((fields.get('confidence') or 0) * 100)|round|int }}%</p>{% endif %}
+      <p class="text-sm text-slate-500">New expenses default to Company. You can change the classification on the expense afterward.</p>
+      <div class="flex flex-wrap gap-3">
+        {% if row.status in ['needs_review', 'duplicate_candidate'] %}
+        <button class="bg-teal-700 text-white rounded-lg px-4 py-2" name="action" value="accept">Accept</button>
+        <input class="rounded" name="expense_id" type="number" placeholder="Existing expense ID" value="{{ row.duplicate_expense_id or '' }}">
+        <button class="bg-slate-100 rounded-lg px-4 py-2" name="action" value="link">Link to existing</button>
+        <input class="rounded" name="reason" placeholder="Reason for saving separately">
+        <button class="bg-amber-50 rounded-lg px-4 py-2" name="action" value="save_separate">Save as separate purchase</button>
+        {% endif %}
+        <button class="bg-slate-100 rounded-lg px-4 py-2" name="action" value="retry">Retry extraction</button>
+        <button class="text-red-700 rounded-lg px-4 py-2" name="action" value="reject">Reject</button>
+      </div>
+    </form>
+    {% endif %}
+  </article>
+  {% else %}<div class="bg-white p-8 rounded-xl text-slate-600">No receipt candidates yet.</div>{% endfor %}
+</div>
+{% endblock %}

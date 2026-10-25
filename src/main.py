@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -18,7 +19,6 @@ _polling_mode = os.environ.get("POLLING_MODE") == "1"
 telegram_app = None
 
 if not _polling_mode:
-    from telegram import Update
     from telegram.ext import (
         Application,
         CallbackQueryHandler,
@@ -26,10 +26,20 @@ if not _polling_mode:
         MessageHandler,
         filters,
     )
+
     from src.bot.handlers import (
-        add_command, categories_command, delete_command, export_command,
-        handle_callback, handle_photo, help_command, list_command,
-        nuke_command, report_command, start_command, total_command,
+        add_command,
+        categories_command,
+        delete_command,
+        export_command,
+        handle_callback,
+        handle_photo,
+        help_command,
+        list_command,
+        nuke_command,
+        report_command,
+        start_command,
+        total_command,
     )
 
     telegram_app = (
@@ -69,9 +79,23 @@ async def lifespan(app: FastAPI):
         logger.info("Telegram webhook set to %s", webhook_url)
 
     await scheduler_runner.start_scheduler()
+    intake_task = None
+    if settings.email_intake_enabled:
+        from src.services.email_intake import run_forever
+        intake_task = asyncio.create_task(run_forever(), name="email-receipt-intake")
+    from src.services.receipt_intake import run_pending_forever
+    receipt_task = asyncio.create_task(run_pending_forever(), name="receipt-retry-worker")
 
     yield
 
+    for task in (intake_task, receipt_task):
+        if task is None:
+            continue
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await scheduler_runner.stop_scheduler()
 
     if telegram_app and not _polling_mode:
@@ -83,7 +107,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Expense Tracker Bot", lifespan=lifespan)
 
 # Admin panel
-from src.admin.router import router as admin_router
+from src.admin.router import router as admin_router  # noqa: E402
+
 app.include_router(admin_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

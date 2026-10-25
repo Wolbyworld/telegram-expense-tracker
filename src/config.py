@@ -19,6 +19,25 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "Expense Tracker <reports@elcano.cc>"
 
+    # Inbound email is opt-in and never falls back to the outgoing report key.
+    email_intake_enabled: bool = False
+    resend_receiving_api_key: str = ""
+    email_intake_account: str = "expense-tracker"
+    email_intake_address: str = ""
+    email_intake_senders: str = ""
+    email_intake_owner_id: int = 0
+    email_intake_poll_seconds: int = 90
+    email_intake_max_pages: int = 100
+    intake_max_attachment_bytes: int = 10 * 1024 * 1024
+    intake_max_message_bytes: int = 25 * 1024 * 1024
+    intake_max_attachments: int = 10
+    intake_max_pdf_pages: int = 20
+    intake_max_image_pixels: int = 25_000_000
+    intake_max_attempts: int = 5
+    # Optional executable scanner (e.g. /usr/bin/clamdscan), never a shell command.
+    # Email extraction fails closed until a scanner is explicitly configured.
+    intake_scanner_path: str = "/usr/bin/clamscan"
+
     # Currency
     base_currency: str = "EUR"
     exchange_rate_api_key: str = ""
@@ -33,7 +52,7 @@ class Settings(BaseSettings):
     # Receipt tagging
     # When True, the bot asks "Company / Personal" after each receipt before the
     # expense is tagged. When False (default), receipts are saved straight away
-    # (untagged, no confirmation step) — the tag can still be set later via /edit.
+    # as company expenses, matching the deployed application.
     confirm_expense_type: bool = False
 
     @property
