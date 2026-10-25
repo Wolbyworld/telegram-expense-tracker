@@ -58,6 +58,9 @@ Limits: 10 MB/file, 25 MB combined evidence/message, 10 attachments, 20 pages/PD
 25 megapixels/image and 100,000 body characters (including complete decoded HTML markup).
 Oversized HTML is rejected before sanitization, never sliced. Provider limits can be lower.
 Unsafe/over-limit input is quarantined, never silently truncated into a ledger entry.
+Attachment URLs from the authenticated Resend API may use the exact provider host
+cdn.resend.app. Other account-controlled resend.app hosts are rejected; HTTPS,
+public-address resolution, byte limits and the no-redirect rule still apply.
 
 ClamAV must succeed before email/CLI extraction; missing/unavailable/signatures older
 than seven days fail closed. The image obtains signatures at build time. When receiving

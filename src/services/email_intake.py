@@ -191,14 +191,19 @@ class ResendReceiving:
             or target.password
             or target.port not in {None, 443}
             or not target.hostname
-            or not any(
-                target.hostname.endswith(suffix)
-                for suffix in (
-                    ".resend.com",
-                    ".resend.dev",
-                    ".cloudfront.net",
-                    ".amazonaws.com",
-                    ".rmta.net",
+            or not (
+                # Exact provider CDN observed in the authenticated Attachments API.
+                # Do not allow arbitrary account-controlled *.resend.app hosts.
+                target.hostname == "cdn.resend.app"
+                or any(
+                    target.hostname.endswith(suffix)
+                    for suffix in (
+                        ".resend.com",
+                        ".resend.dev",
+                        ".cloudfront.net",
+                        ".amazonaws.com",
+                        ".rmta.net",
+                    )
                 )
             )
         ):

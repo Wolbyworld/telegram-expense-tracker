@@ -34,6 +34,36 @@ from src.services.receipt_files import prepared_images
 REAL_EXTRACT = receipt_intake._extract
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("url", "allowed"),
+    [
+        ("https://cdn.resend.app/synthetic?signature=synthetic", True),
+        ("https://download.resend.com/synthetic", True),
+        ("https://cdn.resend.app:443/synthetic", True),
+        ("http://cdn.resend.app/synthetic", False),
+        ("https://cdn.resend.app.evil.test/synthetic", False),
+        ("https://evilcdn.resend.app/synthetic", False),
+        ("https://account.resend.app/synthetic", False),
+        ("https://cdn.resend.app:8443/synthetic", False),
+        ("https://user@cdn.resend.app/synthetic", False),
+        ("https://127.0.0.1/synthetic", False),
+    ],
+)
+async def test_receiving_attachment_provider_cdn_boundary(monkeypatch, url, allowed):
+    class NetworkNotStartedError(Exception):
+        pass
+
+    def no_network(**kwargs):
+        raise NetworkNotStartedError
+
+    monkeypatch.setattr(email_intake.aiohttp, "TCPConnector", no_network)
+    provider = email_intake.ResendReceiving("synthetic-not-a-key")
+    expected = NetworkNotStartedError if allowed else email_intake.UnsafeReceiptError
+    with pytest.raises(expected):
+        await provider.download(url)
+
+
 def image_bytes():
     image = Image.new("RGB", (300, 500), "white")
     draw = ImageDraw.Draw(image)
