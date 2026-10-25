@@ -109,6 +109,7 @@ async def evidence(candidate_id: str, db: AsyncSession = Depends(get_db)):
             "image/webp": ".webp",
             "application/pdf": ".pdf",
             "text/plain": ".txt",
+            "message/rfc822": ".eml",
         }.get(row.mime_type, ".bin"),
         content_disposition_type="attachment",
     )

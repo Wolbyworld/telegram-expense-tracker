@@ -10,16 +10,17 @@ import socket
 import uuid
 from datetime import timedelta
 from email.utils import getaddresses
-from html.parser import HTMLParser
 from urllib.parse import quote, urlsplit
 
 import aiohttp
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
+from yarl import URL
 
 from src.config import settings
 from src.models import async_session
 from src.models.intake import IncomingMessage, IntakePollState
+from src.services.email_content import body_text
 from src.services.receipt_files import UnsafeReceiptError, store_private
 from src.services.receipt_intake import (
     checked_owner,
@@ -87,65 +88,12 @@ def permitted_metadata(email):
 
 def authenticated(email):
     auth = email.get("authentication") or {}
+    if not isinstance(auth, dict):
+        return False
     # These are Resend's receiving-server results, not message-supplied headers.
     return auth.get("dmarc") == "pass" or (
         auth.get("dkim") == "pass" and auth.get("dmarc") == "gray"
     )
-
-
-class TextOnly(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.parts = []
-        self.hidden = 0
-
-    def handle_starttag(self, tag, attrs):
-        if tag in {"script", "style", "iframe", "form", "noscript"}:
-            self.hidden += 1
-        if not self.hidden and tag in {"p", "div", "br", "tr", "li"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag):
-        if tag in {"script", "style", "iframe", "form", "noscript"} and self.hidden:
-            self.hidden -= 1
-
-    def handle_data(self, data):
-        if not self.hidden:
-            self.parts.append(data)
-
-
-def body_text(email):
-    plain = email.get("text")
-    if plain and len(plain) > 100_000:
-        raise UnsafeReceiptError("email_body_size_limit")
-    if plain and plain.strip():
-        body = plain
-    else:
-        html = email.get("html") or ""
-        # Current API may return data-URI HTML. Decode locally, never fetch a URL.
-        if html.startswith("data:"):
-            import base64
-            from urllib.parse import unquote_to_bytes
-
-            header, _, content = html.partition(",")
-            try:
-                html = (
-                    base64.b64decode(content, validate=True)
-                    if ";base64" in header
-                    else unquote_to_bytes(content)
-                ).decode("utf-8")
-            except (ValueError, UnicodeError):
-                raise UnsafeReceiptError("invalid_html_encoding") from None
-        parser = TextOnly()
-        if len(html) > 100_000:
-            raise UnsafeReceiptError("email_html_size_limit")
-        parser.feed(html)
-        body = "".join(parser.parts)
-    if len(body) > 100_000:
-        raise UnsafeReceiptError("email_body_size_limit")
-    if not body.strip():
-        raise UnsafeReceiptError("missing_email_body")
-    return body
 
 
 class ResendReceiving:
@@ -212,7 +160,9 @@ class ResendReceiving:
         async with aiohttp.ClientSession(
             connector=connector, timeout=aiohttp.ClientTimeout(total=45)
         ) as http:
-            async with http.get(url, allow_redirects=False) as response:
+            # CloudFront signatures cover the exact query representation. Requoting
+            # e.g. an encoded filename invalidates an otherwise fresh provider URL.
+            async with http.get(URL(url, encoded=True), allow_redirects=False) as response:
                 if response.status != 200:
                     # Re-fetch the attachment API on retry to renew its signed URL.
                     raise ReceivingError(f"attachment_http_{response.status}")
@@ -292,6 +242,7 @@ async def stage_message(message_id, provider):
             message.lease_token = token
             message.attempts += 1
         snapshot = message
+    email = None
     try:
         external_id = quote(snapshot.external_id, safe="")
         email = await provider.get(f"/emails/receiving/{external_id}")
@@ -402,6 +353,13 @@ async def stage_message(message_id, provider):
                     )
                 ).scalar_one_or_none()
                 if message:
+                    if isinstance(email, dict):
+                        auth = email.get("authentication")
+                        message.authentication = (
+                            {key: auth.get(key) for key in ("spf", "dkim", "dmarc")}
+                            if isinstance(auth, dict)
+                            else None
+                        )
                     message.status = (
                         "quarantined"
                         if isinstance(exc, UnsafeReceiptError)
@@ -415,7 +373,13 @@ async def stage_message(message_id, provider):
                         else type(exc).__name__
                     )
                     message.next_attempt_at = now() + timedelta(
-                        seconds=min(3600, 30 * 2**message.attempts)
+                        seconds=min(
+                            3600,
+                            max(
+                                30 * 2 ** min(message.attempts, 10),
+                                exc.retry_after if isinstance(exc, ReceivingError) else 0,
+                            ),
+                        )
                     )
                     message.lease_token = None
                     message.lease_until = None
@@ -456,8 +420,16 @@ async def poll_once(provider=None):
                             IncomingMessage.account == settings.email_intake_account,
                             IncomingMessage.provider == "resend",
                             IncomingMessage.status.in_(["received", "retry", "processing"]),
+                            or_(
+                                IncomingMessage.next_attempt_at.is_(None),
+                                IncomingMessage.next_attempt_at <= now(),
+                            ),
+                            or_(
+                                IncomingMessage.lease_until.is_(None),
+                                IncomingMessage.lease_until <= now(),
+                            ),
                         )
-                        .order_by(IncomingMessage.created_at)
+                        .order_by(IncomingMessage.attempts, IncomingMessage.created_at)
                         .limit(100)
                     )
                 )
@@ -465,22 +437,42 @@ async def poll_once(provider=None):
                 .all()
             )
         for message_id in pending:
-            await stage_message(message_id, provider)
+            try:
+                await stage_message(message_id, provider)
+            except ReceivingCredentialsError:
+                raise
+            except ReceivingError as exc:
+                if str(exc) == "provider_http_429":
+                    raise
+                # This message retains its durable backoff/error. Other messages
+                # must still reach review, even if a single CDN object is denied.
+                continue
         await process_pending()
         async with async_session() as session:
             async with session.begin():
+                unresolved = await session.scalar(
+                    select(IncomingMessage.id)
+                    .where(
+                        IncomingMessage.account == settings.email_intake_account,
+                        IncomingMessage.provider == "resend",
+                        IncomingMessage.status.in_(["retry", "failed"]),
+                    )
+                    .limit(1)
+                )
+                attention = "messages_retrying_or_failed" if unresolved else None
                 await session.execute(
                     insert(IntakePollState)
                     .values(
                         account=settings.email_intake_account,
                         last_success_at=now(),
+                        last_error=attention,
                         scanned_messages=scanned,
                     )
                     .on_conflict_do_update(
                         index_elements=["account"],
                         set_={
                             "last_success_at": now(),
-                            "last_error": None,
+                            "last_error": attention,
                             "scanned_messages": scanned,
                         },
                     )
@@ -500,6 +492,7 @@ async def poll_once(provider=None):
                         index_elements=["account"],
                         set_={
                             "last_error": type(exc).__name__,
+                            "scanned_messages": scanned,
                         },
                     )
                 )

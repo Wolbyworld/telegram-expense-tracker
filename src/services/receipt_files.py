@@ -12,10 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from src.config import settings
-
-
-class UnsafeReceiptError(ValueError):
-    pass
+from src.services.intake_errors import UnsafeReceiptError
 
 
 def store_private(data: bytes, suffix: str = ".bin") -> str:
@@ -71,7 +68,7 @@ async def scan_file(path: Path):
 
 
 @asynccontextmanager
-async def prepared_images(path: Path, mime: str):
+async def _prepared_output(path: Path, mime: str):
     with tempfile.TemporaryDirectory(prefix="expense-decode-") as directory:
         source = Path(directory) / "input.bin"
         shutil.copyfile(path, source)
@@ -91,6 +88,9 @@ async def prepared_images(path: Path, mime: str):
             mime,
             str(settings.intake_max_image_pixels),
             str(settings.intake_max_pdf_pages),
+            str(settings.intake_max_attachment_bytes),
+            str(settings.intake_max_message_bytes),
+            str(settings.intake_max_attachments),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
             env={
@@ -110,18 +110,64 @@ async def prepared_images(path: Path, mime: str):
             if isinstance(exc, asyncio.CancelledError):
                 raise
             raise UnsafeReceiptError("decoder_timeout") from None
-        if process.returncode or len(output) > 16_384:
+        if len(output) > (1_048_576 if mime == "message/rfc822" else 16_384):
             raise UnsafeReceiptError("decoder_rejected")
-        files = json.loads(output)
+        try:
+            files = json.loads(output)
+        except (ValueError, UnicodeError):
+            raise UnsafeReceiptError("decoder_rejected") from None
+        if process.returncode:
+            error = files.get("error", "") if isinstance(files, dict) else ""
+            if error.startswith(("mime_", "email_")) and len(error) <= 100:
+                raise UnsafeReceiptError(error)
+            raise UnsafeReceiptError("decoder_rejected")
+        yield Path(directory).resolve(), files
+
+
+def decoded_path(filename: str, directory: Path) -> Path:
+    source = Path(filename)
+    path = source.resolve()
+    if not path.is_relative_to(directory) or not path.is_file() or source.is_symlink():
+        raise UnsafeReceiptError("decoder_invalid_output")
+    return path
+
+
+@asynccontextmanager
+async def prepared_images(path: Path, mime: str):
+    async with _prepared_output(path, mime) as (directory, files):
         if not isinstance(files, list) or not files:
             raise UnsafeReceiptError("decoder_rejected")
         images = []
+        total = 0
         for filename in files:
-            image = Path(filename).resolve()
-            if not image.is_relative_to(Path(directory).resolve()):
-                raise UnsafeReceiptError("decoder_invalid_output")
-            images.append(image.read_bytes())
+            image = decoded_path(filename, directory).read_bytes()
+            total += len(image)
+            if total > settings.intake_max_message_bytes:
+                raise UnsafeReceiptError("decoded_image_size_limit")
+            images.append(image)
         yield images
+
+
+@asynccontextmanager
+async def prepared_email(path: Path):
+    async with _prepared_output(path, "message/rfc822") as (directory, result):
+        if not isinstance(result, dict) or not isinstance(result.get("parts"), list):
+            raise UnsafeReceiptError("decoder_invalid_output")
+        if not isinstance(result.get("text"), str) or len(result["text"]) > 100_000:
+            raise UnsafeReceiptError("email_body_size_limit")
+        if len(result["parts"]) > settings.intake_max_attachments:
+            raise UnsafeReceiptError("mime_attachment_count_limit")
+        total = 0
+        for part in result["parts"]:
+            part["path"] = decoded_path(part["path"], directory)
+            size = part["path"].stat().st_size
+            total += size
+            if (
+                size > settings.intake_max_attachment_bytes
+                or total > settings.intake_max_message_bytes
+            ):
+                raise UnsafeReceiptError("mime_decoded_size_limit")
+        yield result
 
 
 def content_hash(data: bytes) -> str:

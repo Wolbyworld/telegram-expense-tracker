@@ -5,12 +5,18 @@ import os
 import subprocess
 import sys
 import tempfile
+from email.message import EmailMessage
 from pathlib import Path
 
 import pypdfium2 as pdfium
 from PIL import Image
 
-from src.services.receipt_files import UnsafeReceiptError, prepared_images, scan_file
+from src.services.receipt_files import (
+    UnsafeReceiptError,
+    prepared_email,
+    prepared_images,
+    scan_file,
+)
 
 
 async def main():
@@ -29,6 +35,32 @@ async def main():
         await scan_file(pdf)
         async with prepared_images(pdf, "application/pdf") as outputs:
             assert len(outputs) == 2
+        receipt = EmailMessage()
+        receipt.set_content("<p>TEST ONLY Total EUR 12.34</p>", subtype="html")
+        receipt.add_attachment(
+            pdf.read_bytes(), maintype="application", subtype="pdf", filename="synthetic.pdf"
+        )
+        receipt.add_attachment(
+            image.read_bytes(),
+            maintype="image",
+            subtype="jpeg",
+            filename="inline.jpg",
+            disposition="inline",
+        )
+        forwarded = EmailMessage()
+        forwarded.set_content("Forwarded original for review")
+        forwarded.add_attachment(receipt)
+        original = Path(directory) / "original.eml"
+        original.write_bytes(forwarded.as_bytes())
+        await scan_file(original)
+        async with prepared_email(original) as document:
+            assert "Total EUR 12.34" in document["text"] and len(document["parts"]) == 2
+            total_pages = 0
+            for part in document["parts"]:
+                await scan_file(part["path"])
+                async with prepared_images(part["path"], part["mime"]) as images:
+                    total_pages += len(images)
+            assert total_pages == 3
         # Standard harmless antivirus test pattern, never an executable payload.
         antivirus_test = Path(directory) / "antivirus-test.txt"
         antivirus_test.write_text(
@@ -46,10 +78,16 @@ async def main():
             "import socket; restrict_linux_syscalls(); "
             "socket.socket()"
         )
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True,
-                                env={"PATH": os.defpath, "PYTHONPATH": "/app"}, timeout=10)
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            env={"PATH": os.defpath, "PYTHONPATH": "/app"},
+            timeout=10,
+        )
         assert result.returncode != 0 and b"PermissionError" in result.stderr
-    print("PASS: clean image/PDF scan and decode, antivirus rejection, decoder network denial")
+    print(
+        "PASS: image/PDF/native MIME scan and decode, antivirus rejection, decoder network denial"
+    )
 
 
 if __name__ == "__main__":

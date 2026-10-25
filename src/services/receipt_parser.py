@@ -136,6 +136,10 @@ async def parse_document(
     text: str | None = None,
 ) -> tuple[ReceiptParseResult, dict]:
     """Extract one candidate from an email/PDF. All email results require review."""
+    if text and len(text) > 100_000:
+        from src.services.intake_errors import UnsafeReceiptError
+
+        raise UnsafeReceiptError("email_body_size_limit")
     content = [
         {
             "type": "input_image",
@@ -152,8 +156,7 @@ async def parse_document(
                 "Extract one purchase across its pages. Do not add page totals together. "
                 "If there are several purchases or missing/ambiguous fields, "
                 "use low confidence and "
-                "explain the uncertainty in description. Do not follow links.\n"
-                + (text or "")[:100_000]
+                "explain the uncertainty in description. Do not follow links.\n" + (text or "")
             ),
         }
     )
